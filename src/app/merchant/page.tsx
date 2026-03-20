@@ -224,7 +224,7 @@ export default function MerchantTerminal() {
             className="w-7 h-7 rounded-lg flex items-center justify-center"
             style={{
               background:
-                "linear-gradient(135deg, var(--accent), var(--secondary))",
+                "linear-gradient(135deg, var(--primary), #8b85ff)",
             }}
           >
             <svg
@@ -235,7 +235,7 @@ export default function MerchantTerminal() {
             >
               <path
                 d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                stroke="#0a0b0f"
+                stroke="#ffffff"
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -246,7 +246,7 @@ export default function MerchantTerminal() {
             className="text-sm font-semibold tracking-widest uppercase"
             style={{
               fontFamily: "var(--font-code)",
-              color: "var(--text-muted)",
+              color: "var(--text-secondary)",
               letterSpacing: "0.12em",
             }}
           >
@@ -309,14 +309,14 @@ export default function MerchantTerminal() {
               style={{
                 width: 64,
                 height: 64,
-                background: "var(--accent-dim, rgba(0,229,160,0.06))",
-                border: "1px solid rgba(0, 229, 160, 0.12)",
+                background: "rgba(99, 91, 255, 0.06)",
+                border: "1px solid rgba(99, 91, 255, 0.15)",
               }}
             >
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <path d="M21 12V7H5a2 2 0 010-4h14v4" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M3 5v14a2 2 0 002 2h16v-5" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M18 12a1 1 0 100 4h4v-4h-4z" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M21 12V7H5a2 2 0 010-4h14v4" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M3 5v14a2 2 0 002 2h16v-5" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M18 12a1 1 0 100 4h4v-4h-4z" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
             <div className="flex flex-col items-center gap-2">
@@ -342,13 +342,13 @@ export default function MerchantTerminal() {
             <div
               className="flex items-center gap-2 px-3 py-2 rounded-lg"
               style={{
-                background: "rgba(255,255,255,0.03)",
+                background: "var(--bg-card)",
                 border: "1px solid var(--border)",
                 fontFamily: "var(--font-code)",
               }}
             >
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#22c55e" }} />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--green)" }} />
+              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
               </span>
             </div>
@@ -398,7 +398,7 @@ export default function MerchantTerminal() {
           className="text-center text-xs"
           style={{
             fontFamily: "var(--font-code)",
-            color: "var(--text-dim)",
+            color: "var(--text-muted)",
           }}
         >
           Merchant terminal v0.1
@@ -451,13 +451,13 @@ function CodeStep({
           className={fiatLabel ? "text-sm" : "text-3xl font-bold"}
           style={{
             fontFamily: "var(--font-code)",
-            color: fiatLabel ? "var(--text-muted)" : "var(--text)",
+            color: fiatLabel ? "var(--text-secondary)" : "var(--text)",
           }}
         >
           {formatAmount(amount)}
           <span
             className="text-sm font-semibold ml-2"
-            style={{ color: "var(--accent)", opacity: 0.7 }}
+            style={{ color: "var(--primary)", opacity: 0.7 }}
           >
             SOL
           </span>
@@ -528,13 +528,13 @@ function WaitingStep({
           className={fiatLabel ? "text-sm" : "text-3xl font-bold"}
           style={{
             fontFamily: "var(--font-code)",
-            color: fiatLabel ? "var(--text-muted)" : "var(--text)",
+            color: fiatLabel ? "var(--text-secondary)" : "var(--text)",
           }}
         >
           {formatAmount(amount)}
           <span
             className="text-sm font-semibold ml-2"
-            style={{ color: "var(--accent)", opacity: 0.7 }}
+            style={{ color: "var(--primary)", opacity: 0.7 }}
           >
             SOL
           </span>
@@ -551,9 +551,8 @@ function WaitingStep({
               fontFamily: "var(--font-code)",
               borderRadius: "var(--radius-digit)",
               backgroundColor: "var(--bg-card)",
-              color: "var(--accent)",
-              border: "2px solid var(--accent)",
-              boxShadow: "0 0 14px var(--accent-dim)",
+              color: "var(--primary)",
+              border: "2px solid var(--primary)",
               opacity: 0.55,
             }}
           >
@@ -580,7 +579,7 @@ function WaitingStep({
         className="text-sm text-center leading-relaxed"
         style={{
           fontFamily: "var(--font-code)",
-          color: "var(--text-muted)",
+          color: "var(--text-secondary)",
         }}
       >
         Waiting for the customer to confirm
@@ -611,7 +610,7 @@ function SuccessStep({
         <div
           className="absolute w-20 h-20 rounded-full"
           style={{
-            border: "2px solid var(--accent)",
+            border: "2px solid var(--green)",
             animation: "ripple-expand 1.5s ease-out 0.3s forwards",
             opacity: 0,
           }}
@@ -619,7 +618,7 @@ function SuccessStep({
         <div
           className="absolute w-20 h-20 rounded-full"
           style={{
-            border: "2px solid var(--accent)",
+            border: "2px solid var(--green)",
             animation: "ripple-expand 1.5s ease-out 0.6s forwards",
             opacity: 0,
           }}
@@ -630,8 +629,7 @@ function SuccessStep({
           className="w-20 h-20 rounded-full flex items-center justify-center"
           style={{
             background:
-              "linear-gradient(135deg, var(--accent), var(--success))",
-            boxShadow: "0 0 40px var(--accent-dim)",
+              "linear-gradient(135deg, var(--green), #28a058)",
           }}
         >
           <svg
@@ -642,7 +640,7 @@ function SuccessStep({
           >
             <path
               d="M10 20L17 27L30 13"
-              stroke="#0a0b0f"
+              stroke="#ffffff"
               strokeWidth="3.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -663,7 +661,7 @@ function SuccessStep({
           className="text-xs tracking-widest uppercase"
           style={{
             fontFamily: "var(--font-code)",
-            color: "var(--accent)",
+            color: "var(--green)",
           }}
         >
           Payment confirmed
@@ -680,13 +678,13 @@ function SuccessStep({
           className={fiatLabel ? "text-base" : "text-4xl font-bold"}
           style={{
             fontFamily: "var(--font-code)",
-            color: fiatLabel ? "var(--text-muted)" : "var(--text)",
+            color: fiatLabel ? "var(--text-secondary)" : "var(--text)",
           }}
         >
           {formatAmount(amount)}
           <span
             className="text-base font-semibold ml-2"
-            style={{ color: "var(--accent)", opacity: 0.7 }}
+            style={{ color: "var(--primary)", opacity: 0.7 }}
           >
             SOL
           </span>
@@ -737,9 +735,8 @@ function ErrorStep({
       <div
         className="w-16 h-16 rounded-full flex items-center justify-center"
         style={{
-          backgroundColor: "var(--bg-card)",
+          backgroundColor: "rgba(223, 27, 65, 0.06)",
           border: "2px solid var(--error)",
-          boxShadow: "0 0 24px rgba(239, 68, 68, 0.15)",
         }}
       >
         <svg
@@ -784,7 +781,7 @@ function ErrorStep({
           className="text-sm text-center leading-relaxed max-w-[280px]"
           style={{
             fontFamily: "var(--font-code)",
-            color: "var(--text-muted)",
+            color: "var(--text-secondary)",
           }}
         >
           {message}
@@ -824,10 +821,10 @@ function ErrorStep({
 // ---------------------------------------------------------------------------
 
 const STATUS_COLORS: Record<StatusColor, string> = {
-  green: "#22c55e",
-  yellow: "#eab308",
-  red: "#ef4444",
-  idle: "#475569",
+  green: "#30b566",
+  yellow: "#e5960a",
+  red: "#df1b41",
+  idle: "#a3acb9",
 };
 
 function getStatusInfo(state: TerminalState): {

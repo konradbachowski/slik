@@ -115,12 +115,12 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
               fontFamily: "var(--font-code)",
               borderRadius: "var(--radius-btn)",
               backgroundColor:
-                currency === c.code ? "var(--accent)" : "var(--bg-card)",
-              color: currency === c.code ? "#0a0b0f" : "var(--text-muted)",
+                currency === c.code ? "var(--primary)" : "var(--bg-card)",
+              color: currency === c.code ? "#ffffff" : "var(--text-secondary)",
               border:
                 currency === c.code
-                  ? "1px solid var(--accent)"
-                  : "1px solid var(--border-subtle)",
+                  ? "1px solid var(--primary)"
+                  : "1px solid var(--border)",
               transition: "all 0.15s ease",
             }}
           >
@@ -134,7 +134,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
         className="w-full rounded-2xl mb-4 px-5 py-7"
         style={{
           backgroundColor: "var(--bg-card)",
-          border: "1px solid var(--border-subtle)",
+          border: "1px solid var(--border)",
           borderRadius: "var(--radius-card)",
         }}
       >
@@ -143,7 +143,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
             className="text-5xl font-bold tracking-tight tabular-nums leading-none"
             style={{
               fontFamily: "var(--font-code)",
-              color: value === "0" ? "var(--text-dim)" : "var(--text)",
+              color: value === "0" ? "var(--text-muted)" : "var(--text)",
               transition: "color 0.2s ease",
             }}
           >
@@ -153,7 +153,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
             className="text-lg font-semibold tracking-wider uppercase"
             style={{
               fontFamily: "var(--font-code)",
-              color: "var(--accent)",
+              color: "var(--primary)",
               opacity: 0.65,
             }}
           >
@@ -169,7 +169,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
           {priceLoading ? (
             <span
               className="text-xs"
-              style={{ color: "var(--text-dim)", fontFamily: "var(--font-code)" }}
+              style={{ color: "var(--text-muted)", fontFamily: "var(--font-code)" }}
             >
               Loading price...
             </span>
@@ -177,14 +177,14 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
             <>
               <span
                 className="text-sm font-medium"
-                style={{ color: "var(--text-muted)", fontFamily: "var(--font-code)" }}
+                style={{ color: "var(--text-secondary)", fontFamily: "var(--font-code)" }}
               >
                 = {solAmount.toFixed(6)} SOL
               </span>
               {prices && (
                 <span
                   className="text-xs"
-                  style={{ color: "var(--text-dim)", fontFamily: "var(--font-code)" }}
+                  style={{ color: "var(--text-muted)", fontFamily: "var(--font-code)" }}
                 >
                   (1 SOL = {prices[currency].toFixed(2)} {currency})
                 </span>
@@ -193,7 +193,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
           ) : (
             <span
               className="text-xs"
-              style={{ color: "var(--text-dim)", fontFamily: "var(--font-code)" }}
+              style={{ color: "var(--text-muted)", fontFamily: "var(--font-code)" }}
             >
               Enter amount to see SOL conversion
             </span>
@@ -205,7 +205,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
           className="mt-4 h-px w-full rounded-full"
           style={{
             background: isValid
-              ? "linear-gradient(90deg, transparent, var(--accent), transparent)"
+              ? "linear-gradient(90deg, transparent, var(--primary), transparent)"
               : "linear-gradient(90deg, transparent, var(--border), transparent)",
             transition: "background 0.3s ease",
           }}
@@ -229,7 +229,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
                   ? "var(--bg-card-hover)"
                   : "var(--bg-card)",
                 borderRadius: "var(--radius-btn)",
-                border: "1px solid var(--border-subtle)",
+                border: "1px solid var(--border)",
                 transform: isPressed ? "scale(0.93)" : "scale(1)",
                 transition: "transform 0.1s ease, background-color 0.1s ease",
               }}
@@ -247,7 +247,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
                   height="22"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="var(--text-muted)"
+                  stroke="var(--text-secondary)"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -281,9 +281,9 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
         style={{
           fontFamily: "var(--font-code)",
           borderRadius: "var(--radius-btn)",
-          backgroundColor: isValid ? "var(--accent)" : "var(--bg-card)",
-          color: isValid ? "#0a0b0f" : "var(--text-dim)",
-          border: isValid ? "none" : "1px solid var(--border-subtle)",
+          backgroundColor: isValid ? "var(--primary)" : "var(--bg-card)",
+          color: isValid ? "#ffffff" : "var(--text-muted)",
+          border: isValid ? "none" : "1px solid var(--border)",
           opacity: isValid ? 1 : 0.5,
           transition: "all 0.2s ease",
           letterSpacing: "0.08em",

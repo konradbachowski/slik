@@ -162,16 +162,15 @@ export default function CodeInput({
                 style={{
                   fontFamily: "var(--font-code)",
                   borderRadius: "var(--radius-digit)",
-                  backgroundColor: "var(--bg-card)",
+                  backgroundColor: isFilled
+                    ? "rgba(99, 91, 255, 0.04)"
+                    : "var(--bg-card)",
                   color: isFilled ? "var(--text)" : "transparent",
                   border: `2px solid ${
-                    isFilled ? "var(--accent)" : "var(--border)"
+                    isFilled ? "var(--primary)" : "var(--border)"
                   }`,
-                  boxShadow: isFilled
-                    ? "0 0 14px var(--accent-dim)"
-                    : "none",
                   transition:
-                    "border-color 0.2s ease, box-shadow 0.2s ease",
+                    "border-color 0.2s ease, background-color 0.2s ease",
                   opacity: disabled ? 0.4 : 1,
                 }}
                 aria-label={`Digit ${index + 1} of ${CODE_LENGTH}`}
@@ -183,7 +182,7 @@ export default function CodeInput({
                   <div
                     className="w-0.5 h-6 rounded-full"
                     style={{
-                      backgroundColor: "var(--text-dim)",
+                      backgroundColor: "var(--primary)",
                       animation:
                         "status-blink 1s ease-in-out infinite",
                     }}
@@ -199,7 +198,7 @@ export default function CodeInput({
         className="mt-4 text-sm tracking-wide"
         style={{
           fontFamily: "var(--font-code)",
-          color: "var(--text-muted)",
+          color: "var(--text-secondary)",
         }}
       >
         Enter the customer&apos;s 6-digit code
