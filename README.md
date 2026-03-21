@@ -63,6 +63,77 @@ target/idl/solanablik.json        # Generated IDL
 src/lib/idl/                      # IDL + types (copied for frontend)
 ```
 
+## SDK
+
+SolanaBLIK ships as two npm packages so any app can integrate BLIK-style payments:
+
+### `@solana-blik/sdk` — on-chain client
+
+Transaction building, PDA derivation, receipt verification, React hooks. No `@coral-xyz/anchor` runtime — instructions are built manually for minimal bundle size.
+
+```bash
+npm install @solana-blik/sdk @solana/web3.js
+```
+
+```typescript
+import { createPayTransaction, deriveReceiptPda, fetchReceipt, watchReceipt } from "@solana-blik/sdk";
+
+// Build a pay transaction
+const { transaction, receiptPda } = await createPayTransaction({
+  customer: customerPubkey,
+  merchant: merchantPubkey,
+  amountSol: 0.5,
+  paymentId: "550e8400-e29b-41d4-a716-446655440000",
+  connection,
+});
+
+// Watch for on-chain confirmation (WebSocket)
+const unsubscribe = watchReceipt(connection, paymentId, {
+  onConfirmed: (receipt) => console.log("Paid!", receipt.amountSol, "SOL"),
+  timeoutMs: 120_000,
+});
+```
+
+**React hooks** (`@solana-blik/sdk/react`):
+
+```tsx
+import { usePaymentCode, useBlikPay, useMerchantPayment } from "@solana-blik/sdk/react";
+
+// Customer: generate code & approve payment
+const { code, status, linkedPayment, generate } = usePaymentCode({ apiBaseUrl: "/api" });
+const { pay, status: payStatus } = useBlikPay();
+
+// Merchant: create payment & watch for confirmation
+const { createPayment, linkCode, status } = useMerchantPayment({ apiBaseUrl: "/api", connection });
+```
+
+### `@solana-blik/server` — backend handlers
+
+Framework-agnostic payment handlers + storage adapters. One catch-all route replaces 7 API endpoints.
+
+```bash
+npm install @solana-blik/server @solana-blik/sdk @solana/web3.js
+```
+
+**Next.js integration (~10 lines):**
+
+```typescript
+// app/api/[...path]/route.ts
+import { createBlikRoutes } from "@solana-blik/server/nextjs";
+import { createUpstashStore } from "@solana-blik/server";
+import { Connection, clusterApiUrl } from "@solana/web3.js";
+
+const store = createUpstashStore({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+export const { GET, POST } = createBlikRoutes({ store, connection });
+```
+
+For development without Redis, use `createMemoryStore()` — works identically with TTL-based expiration.
+
 ## Stack
 
 | Layer | Tech |
@@ -77,13 +148,15 @@ src/lib/idl/                      # IDL + types (copied for frontend)
 
 ## API endpoints
 
+All served by a single catch-all route (`api/[...path]/route.ts`) via `@solana-blik/server`:
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/payments/create` | POST | Merchant creates payment (amount + wallet) |
 | `/api/codes/generate` | POST | Customer generates 6-digit code |
 | `/api/payments/link` | POST | Merchant links code to payment, derives receipt PDA |
-| `/api/payments/[id]/status` | GET | Payment status (with lazy on-chain check) |
-| `/api/codes/[code]/resolve` | GET | Customer polls if code was linked |
+| `/api/payments/{id}/status` | GET | Payment status (with lazy on-chain check) |
+| `/api/codes/{code}/resolve` | GET | Customer polls if code was linked |
 | `/api/pay` | GET/POST | Builds Anchor `pay` TX, returns serialized + receiptPda |
 | `/api/price` | GET | Current SOL prices in PLN/USD/EUR |
 
@@ -117,25 +190,22 @@ Currently on **devnet** — switch Phantom to devnet in Settings > Developer Set
 ```
 ├── programs/solanablik/
 │   └── src/lib.rs                    # Anchor program (pay instruction)
+├── packages/
+│   ├── sdk/                          # @solana-blik/sdk
+│   │   └── src/
+│   │       ├── index.ts              # Core: TX building, PDA, receipt parsing
+│   │       └── react/                # React hooks (usePaymentCode, useBlikPay, etc.)
+│   └── server/                       # @solana-blik/server
+│       └── src/
+│           ├── handlers.ts           # Framework-agnostic payment handlers
+│           ├── storage.ts            # Store interface + Redis/memory adapters
+│           └── adapters/nextjs.ts    # Next.js catch-all route adapter
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx                  # Customer (payer) UI
-│   │   ├── merchant/page.tsx         # Merchant terminal UI
-│   │   └── api/
-│   │       ├── codes/generate/       # Generate 6-digit code
-│   │       ├── codes/[code]/resolve/ # Poll code status
-│   │       ├── payments/create/      # Create payment
-│   │       ├── payments/link/        # Link code → payment + derive receipt PDA
-│   │       ├── payments/[id]/status/ # Payment status + lazy on-chain check
-│   │       ├── pay/                  # Anchor TX builder
-│   │       └── price/               # SOL price feed
-│   ├── lib/
-│   │   ├── program.ts               # Anchor client (PDA derivation, IX builder)
-│   │   ├── payment.ts               # Re-exports from program.ts
-│   │   ├── codes.ts                 # Code/payment storage (Redis or in-memory)
-│   │   ├── price.ts                 # CoinGecko price fetcher
-│   │   ├── solana.ts                # Connection config
-│   │   └── idl/                     # Generated Anchor IDL + types
+│   │   ├── page.tsx                  # Customer UI (uses SDK hooks)
+│   │   ├── merchant/page.tsx         # Merchant terminal (uses SDK hooks)
+│   │   └── api/[...path]/route.ts   # Single catch-all (uses server package)
+│   ├── lib/                          # Re-exports from SDK packages
 │   └── components/
 │       ├── AmountInput.tsx           # Numpad with fiat currency selector
 │       ├── CodeDisplay.tsx           # 6-digit code with timer + copy

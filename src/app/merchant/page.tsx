@@ -1,22 +1,15 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useMerchantPayment } from "@solana-blik/sdk/react";
 import AmountInput from "@/components/AmountInput";
 import CodeInput from "@/components/CodeInput";
 import { WalletButton } from "@/components/WalletButton";
-import { deriveReceiptPda, uuidToBytes } from "@/lib/program";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type TerminalState =
-  | { step: "amount" }
-  | { step: "code"; paymentId: string; amount: number; fiatLabel?: string }
-  | { step: "waiting"; paymentId: string; amount: number; code: string; fiatLabel?: string }
-  | { step: "success"; amount: number; fiatLabel?: string }
-  | { step: "error"; message: string; paymentId?: string; amount?: number };
 
 type StatusColor = "green" | "yellow" | "red" | "idle";
 
@@ -27,203 +20,75 @@ type StatusColor = "green" | "yellow" | "red" | "idle";
 export default function MerchantTerminal() {
   const { publicKey, connected } = useWallet();
   const { connection } = useConnection();
-  const [state, setState] = useState<TerminalState>({ step: "amount" });
+
+  const { status, amount, error, createPayment, linkCode, reset } =
+    useMerchantPayment({ apiBaseUrl: "/api", connection });
+
+  // Local state not tracked by the hook
+  const [fiatLabel, setFiatLabel] = useState<string | undefined>();
+  const [enteredCode, setEnteredCode] = useState<string>("");
   const [transitioning, setTransitioning] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
+  const prevStatusRef = useRef(status);
 
   // ----------------------------------
-  // Animated state transition
+  // Smooth transition wrapper
   // ----------------------------------
-  const transitionTo = useCallback((next: TerminalState) => {
+  const withTransition = useCallback((fn: () => void) => {
     setTransitioning(true);
     setTimeout(() => {
-      setState(next);
+      fn();
       setTransitioning(false);
     }, 180);
   }, []);
 
+  // Detect status changes from the hook and animate them
+  if (prevStatusRef.current !== status) {
+    prevStatusRef.current = status;
+    if (!transitioning) {
+      setTransitioning(true);
+      setTimeout(() => setTransitioning(false), 180);
+    }
+  }
+
   // ----------------------------------
-  // Step 1 - create payment
+  // Handlers
   // ----------------------------------
   const handleAmountSubmit = useCallback(
-    async (amount: number, fiatLabel?: string) => {
+    (amt: number, label?: string) => {
       if (!publicKey) return;
-
-      try {
-        const res = await fetch("/api/payments/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount, merchantWallet: publicKey.toBase58() }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(
-            data.error || "Failed to create payment"
-          );
-        }
-
-        const data = await res.json();
-        transitionTo({
-          step: "code",
-          paymentId: data.paymentId,
-          amount,
-          fiatLabel,
-        });
-      } catch (err) {
-        transitionTo({
-          step: "error",
-          message:
-            err instanceof Error
-              ? err.message
-              : "Failed to create payment",
-        });
-      }
+      setFiatLabel(label);
+      createPayment(amt, publicKey.toBase58());
     },
-    [transitionTo, publicKey]
+    [publicKey, createPayment]
   );
 
-  // ----------------------------------
-  // Step 2 - link code
-  // ----------------------------------
   const handleCodeComplete = useCallback(
-    async (code: string) => {
-      if (state.step !== "code") return;
-
-      const { paymentId, amount } = state;
-
-      try {
-        const res = await fetch("/api/payments/link", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paymentId, code }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(
-            data.error || "Code not found or expired"
-          );
-        }
-
-        transitionTo({
-          step: "waiting",
-          paymentId,
-          amount,
-          code,
-          fiatLabel: state.step === "code" ? state.fiatLabel : undefined,
-        });
-      } catch (err) {
-        transitionTo({
-          step: "error",
-          message:
-            err instanceof Error
-              ? err.message
-              : "Failed to link code",
-          paymentId,
-          amount,
-        });
-      }
+    (code: string) => {
+      setEnteredCode(code);
+      linkCode(code);
     },
-    [state, transitionTo]
+    [linkCode]
   );
 
-  // ----------------------------------
-  // Step 3 - WebSocket + fallback poll for confirmation
-  // ----------------------------------
-  useEffect(() => {
-    if (state.step !== "waiting") return;
-
-    const { paymentId, amount } = state;
-    const fiatLabel = state.fiatLabel;
-
-    // Derive receipt PDA client-side
-    const paymentIdBytes = uuidToBytes(paymentId);
-    const [receiptPda] = deriveReceiptPda(paymentIdBytes);
-
-    // Primary: WebSocket subscription on receipt PDA
-    const subId = connection.onAccountChange(
-      receiptPda,
-      (accountInfo) => {
-        if (accountInfo.data.length > 0) {
-          connection.removeAccountChangeListener(subId);
-          clearInterval(fallbackInterval);
-          transitionTo({ step: "success", amount, fiatLabel });
-        }
-      },
-      "confirmed"
-    );
-
-    // Fallback: poll every 3000ms (was 500ms)
-    let attempts = 0;
-    const maxAttempts = 100; // 5 min at 3s
-    const fallbackInterval = setInterval(async () => {
-      attempts++;
-      if (attempts > maxAttempts) {
-        clearInterval(fallbackInterval);
-        connection.removeAccountChangeListener(subId);
-        transitionTo({
-          step: "error",
-          message: "Payment timed out. Please try again.",
-          paymentId,
-          amount,
-        });
-        return;
-      }
-      try {
-        const res = await fetch(`/api/payments/${paymentId}/status`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.status === "paid") {
-          clearInterval(fallbackInterval);
-          connection.removeAccountChangeListener(subId);
-          transitionTo({ step: "success", amount, fiatLabel });
-        } else if (data.status === "expired") {
-          clearInterval(fallbackInterval);
-          connection.removeAccountChangeListener(subId);
-          transitionTo({
-            step: "error",
-            message: "Payment expired.",
-            paymentId,
-            amount,
-          });
-        }
-      } catch {
-        // retry on next interval
-      }
-    }, 3000);
-
-    pollRef.current = fallbackInterval;
-
-    return () => {
-      connection.removeAccountChangeListener(subId);
-      clearInterval(fallbackInterval);
-      pollRef.current = null;
-    };
-  }, [state, transitionTo, connection]);
-
-  // ----------------------------------
-  // Reset
-  // ----------------------------------
   const handleReset = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    transitionTo({ step: "amount" });
-  }, [transitionTo]);
+    withTransition(() => {
+      reset();
+      setFiatLabel(undefined);
+      setEnteredCode("");
+    });
+  }, [reset, withTransition]);
 
   // ----------------------------------
   // Status bar
   // ----------------------------------
-  const statusInfo = getStatusInfo(state);
+  const statusInfo = getStatusInfo(status);
+
+  // Determine which "step" to render based on hook status
+  const isIdle = status === "idle";
+  const isAwaitingCode = status === "awaiting_code";
+  const isConfirming = status === "confirming" || status === "linked";
+  const isPaid = status === "paid";
+  const isError = status === "error" || status === "expired";
 
   return (
     <div
@@ -316,7 +181,7 @@ export default function MerchantTerminal() {
             "opacity 0.16s ease, transform 0.16s ease",
         }}
       >
-        {state.step === "amount" && !connected && (
+        {isIdle && !connected && (
           <div
             className="flex flex-col items-center gap-6 w-full"
             style={{ animation: "fade-in-up 0.35s ease-out both" }}
@@ -354,7 +219,7 @@ export default function MerchantTerminal() {
           </div>
         )}
 
-        {state.step === "amount" && connected && (
+        {isIdle && connected && (
           <div className="flex flex-col items-center gap-4 w-full">
             <div
               className="flex items-center gap-2 px-3 py-2 rounded-lg"
@@ -373,30 +238,30 @@ export default function MerchantTerminal() {
           </div>
         )}
 
-        {state.step === "code" && (
+        {isAwaitingCode && amount !== null && (
           <CodeStep
-            amount={state.amount}
-            fiatLabel={state.fiatLabel}
+            amount={amount}
+            fiatLabel={fiatLabel}
             onCodeComplete={handleCodeComplete}
             onCancel={handleReset}
           />
         )}
 
-        {state.step === "waiting" && (
-          <WaitingStep amount={state.amount} code={state.code} fiatLabel={state.fiatLabel} />
+        {isConfirming && amount !== null && (
+          <WaitingStep amount={amount} code={enteredCode} fiatLabel={fiatLabel} />
         )}
 
-        {state.step === "success" && (
+        {isPaid && amount !== null && (
           <SuccessStep
-            amount={state.amount}
-            fiatLabel={state.fiatLabel}
+            amount={amount}
+            fiatLabel={fiatLabel}
             onReset={handleReset}
           />
         )}
 
-        {state.step === "error" && (
+        {isError && (
           <ErrorStep
-            message={state.message}
+            message={error || (status === "expired" ? "Payment expired." : "An error occurred")}
             onRetry={handleReset}
           />
         )}
@@ -844,19 +709,30 @@ const STATUS_COLORS: Record<StatusColor, string> = {
   idle: "#a3acb9",
 };
 
-function getStatusInfo(state: TerminalState): {
+type MerchantStatus =
+  | "idle"
+  | "awaiting_code"
+  | "linked"
+  | "confirming"
+  | "paid"
+  | "expired"
+  | "error";
+
+function getStatusInfo(status: MerchantStatus): {
   label: string;
   color: StatusColor;
 } {
-  switch (state.step) {
-    case "amount":
+  switch (status) {
+    case "idle":
       return { label: "Ready", color: "green" };
-    case "code":
+    case "awaiting_code":
       return { label: "Awaiting code", color: "yellow" };
-    case "waiting":
+    case "linked":
+    case "confirming":
       return { label: "Processing", color: "yellow" };
-    case "success":
+    case "paid":
       return { label: "Confirmed", color: "green" };
+    case "expired":
     case "error":
       return { label: "Error", color: "red" };
   }

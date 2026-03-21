@@ -1,6 +1,13 @@
+// Re-export from SDK package
 export {
-  createAnchorPaymentTransaction,
-  deriveReceiptPda,
-  uuidToBytes,
   PROGRAM_ID,
-} from "./program";
+  deriveReceiptPda,
+  buildPayInstruction,
+  createPayTransaction,
+  createPayTransaction as createAnchorPaymentTransaction,
+  fetchReceipt,
+  watchReceipt,
+  parseReceipt,
+  uuidToBytes,
+  bytesToUuid,
+} from "@solana-blik/sdk";
