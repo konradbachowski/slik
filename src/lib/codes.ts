@@ -98,7 +98,7 @@ function createMemoryStore(): Store {
     async set(key: string, value: unknown, options: SetOptions): Promise<void> {
       data.set(key, {
         value,
-        expiresAt: Date.now() + options.ex * 1000,
+        expiresAt: Date.now() + options.ex * 1000
       });
     },
     async del(key: string): Promise<void> {
@@ -151,6 +151,17 @@ export async function createPaymentCode(walletPubkey: string): Promise<string> {
       walletPubkey,
       createdAt: Date.now()
     };
+
+    // dev
+    if (!hasRedis) {
+      await store.set(
+        `code:${code}`, 
+        data, 
+        {ex: CODE_TTL}
+      );
+
+      return code;
+    }
   
     const success = await store.set(
       `code:${code}`, 
