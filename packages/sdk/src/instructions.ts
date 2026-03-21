@@ -14,6 +14,10 @@ import {
 } from "./constants";
 import { uuidToBytes } from "./uuid";
 import { deriveReceiptPda } from "./pda";
+import {
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 
 export function buildPayInstruction(config: {
   customer: PublicKey;
@@ -71,20 +75,6 @@ export function buildPayUsdcInstruction(config: {
   paymentId: string;
   programId?: PublicKey;
 }): { instruction: TransactionInstruction; receiptPda: PublicKey } {
-  // Lazy-import to keep spl-token optional for SOL-only consumers
-  let getAssociatedTokenAddressSync: typeof import("@solana/spl-token").getAssociatedTokenAddressSync;
-  let TOKEN_PROGRAM_ID: typeof import("@solana/spl-token").TOKEN_PROGRAM_ID;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const splToken = require("@solana/spl-token");
-    getAssociatedTokenAddressSync = splToken.getAssociatedTokenAddressSync;
-    TOKEN_PROGRAM_ID = splToken.TOKEN_PROGRAM_ID;
-  } catch {
-    throw new Error(
-      "@solana/spl-token is required for USDC payments. Install it: npm i @solana/spl-token"
-    );
-  }
-
   const {
     customer,
     merchant,
