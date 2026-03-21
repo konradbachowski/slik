@@ -1,5 +1,7 @@
 import type { Connection } from "@solana/web3.js";
 import type { Store } from "../storage";
+import type { RateLimitResult } from "../ratelimit";
+import { checkRateLimit, DEFAULT_RATE_LIMITS } from "../ratelimit";
 import * as handlers from "../handlers";
 import { BlikError } from "../handlers";
 
@@ -10,6 +12,53 @@ import { BlikError } from "../handlers";
 export interface BlikRoutesConfig {
   store: Store;
   connection: Connection;
+  /** Set to false to disable rate limiting. Default: true */
+  rateLimit?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Rate-limit helpers
+// ---------------------------------------------------------------------------
+
+function getClientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) return realIp;
+  return "unknown";
+}
+
+async function enforceRateLimit(
+  store: Store,
+  request: Request,
+  routeKey: string
+): Promise<Response | null> {
+  const ip = getClientIp(request);
+  const rule = DEFAULT_RATE_LIMITS[routeKey];
+  if (!rule) return null;
+
+  const result = await checkRateLimit(store, ip, routeKey, rule);
+
+  if (!result.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "Too many requests. Please try again later.",
+        retryAfter: result.resetInSeconds,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(result.resetInSeconds),
+          "X-RateLimit-Remaining": "0",
+        },
+      }
+    );
+  }
+
+  return null; // allowed
 }
 
 // ---------------------------------------------------------------------------
@@ -29,6 +78,8 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
     connection: config.connection,
   };
 
+  const rateLimitEnabled = config.rateLimit !== false;
+
   return {
     async GET(request: Request) {
       const url = new URL(request.url);
@@ -38,6 +89,21 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
         // GET /codes/:code/resolve
         const codeMatch = path.match(/\/codes\/(\d{6})\/resolve$/);
         if (codeMatch) {
+          if (rateLimitEnabled) {
+            // Check both normal and burst limits
+            const blocked = await enforceRateLimit(
+              config.store,
+              request,
+              "codes/resolve"
+            );
+            if (blocked) return blocked;
+            const burstBlocked = await enforceRateLimit(
+              config.store,
+              request,
+              "codes/resolve:burst"
+            );
+            if (burstBlocked) return burstBlocked;
+          }
           const result = await handlers.handleResolveCode(ctx, {
             code: codeMatch[1],
           });
@@ -47,6 +113,14 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
         // GET /payments/:id/status
         const statusMatch = path.match(/\/payments\/([^/]+)\/status$/);
         if (statusMatch) {
+          if (rateLimitEnabled) {
+            const blocked = await enforceRateLimit(
+              config.store,
+              request,
+              "payments/status"
+            );
+            if (blocked) return blocked;
+          }
           const result = await handlers.handlePaymentStatus(ctx, {
             paymentId: statusMatch[1],
           });
@@ -55,6 +129,14 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
 
         // GET /price
         if (path.endsWith("/price")) {
+          if (rateLimitEnabled) {
+            const blocked = await enforceRateLimit(
+              config.store,
+              request,
+              "price"
+            );
+            if (blocked) return blocked;
+          }
           const { getSolPrice } = await import("../price");
           const currency = url.searchParams.get("currency");
           if (currency) {
@@ -63,13 +145,21 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
             );
             return Response.json({ price, currency });
           }
-          // No currency param → return all prices
+          // No currency param -> return all prices
           const prices = await getSolPrice();
           return Response.json({ prices });
         }
 
         // Solana Pay label (GET /pay)
         if (path.endsWith("/pay")) {
+          if (rateLimitEnabled) {
+            const blocked = await enforceRateLimit(
+              config.store,
+              request,
+              "pay"
+            );
+            if (blocked) return blocked;
+          }
           return Response.json({ label: "SolanaBLIK", icon: "/icon.png" });
         }
 
@@ -98,24 +188,56 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
 
         // POST /codes/generate
         if (path.endsWith("/codes/generate")) {
+          if (rateLimitEnabled) {
+            const blocked = await enforceRateLimit(
+              config.store,
+              request,
+              "codes/generate"
+            );
+            if (blocked) return blocked;
+          }
           const result = await handlers.handleGenerateCode(ctx, body);
           return Response.json(result);
         }
 
         // POST /payments/create
         if (path.endsWith("/payments/create")) {
+          if (rateLimitEnabled) {
+            const blocked = await enforceRateLimit(
+              config.store,
+              request,
+              "payments/create"
+            );
+            if (blocked) return blocked;
+          }
           const result = await handlers.handleCreatePayment(ctx, body);
           return Response.json(result);
         }
 
         // POST /payments/link
         if (path.endsWith("/payments/link")) {
+          if (rateLimitEnabled) {
+            const blocked = await enforceRateLimit(
+              config.store,
+              request,
+              "payments/link"
+            );
+            if (blocked) return blocked;
+          }
           const result = await handlers.handleLinkPayment(ctx, body);
           return Response.json(result);
         }
 
         // POST /pay
         if (path.endsWith("/pay")) {
+          if (rateLimitEnabled) {
+            const blocked = await enforceRateLimit(
+              config.store,
+              request,
+              "pay"
+            );
+            if (blocked) return blocked;
+          }
           const paymentId =
             url.searchParams.get("paymentId") || body.paymentId;
           const result = await handlers.handlePay(ctx, {

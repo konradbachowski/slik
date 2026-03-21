@@ -12,6 +12,7 @@ import {
   updatePayment,
   linkCodeToPayment,
   setReferenceMapping,
+  atomicLinkPayment,
 } from "./storage";
 
 // ---------------------------------------------------------------------------
@@ -184,6 +185,7 @@ export async function handleLinkPayment(
     throw new BlikError("Payment not found or expired.", 404);
   }
 
+  // Fast-fail status check before PDA derivation
   if (payment.status !== "awaiting_code") {
     throw new BlikError(
       `Payment cannot be linked. Current status: ${payment.status}`,
@@ -193,20 +195,22 @@ export async function handleLinkPayment(
 
   // Derive receipt PDA deterministically from paymentId
   const [receiptPda] = deriveReceiptPda(paymentId);
-
-  // Link the code to the payment
-  await linkCodeToPayment(ctx.store, code, paymentId);
-
-  // Update payment with linked data
   const reference = receiptPda.toBase58();
-  await updatePayment(ctx.store, paymentId, {
+
+  // Atomic update - only succeeds if status is still "awaiting_code"
+  const linked = await atomicLinkPayment(ctx.store, paymentId, {
     status: "linked",
     code,
     walletPubkey: codeData.walletPubkey,
     reference,
   });
 
-  // Store reverse mapping: reference -> paymentId
+  if (!linked) {
+    throw new BlikError("Payment was already linked by another request.", 409);
+  }
+
+  // Non-critical: link code record and store reference mapping
+  await linkCodeToPayment(ctx.store, code, paymentId);
   await setReferenceMapping(ctx.store, reference, paymentId);
 
   return {

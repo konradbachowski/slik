@@ -15,6 +15,17 @@ export interface Store {
   get<T>(key: string): Promise<T | null>;
   set(key: string, value: unknown, ttlSeconds: number): Promise<void>;
   del(key: string): Promise<void>;
+  /**
+   * Atomic compare-and-set: read current value, check if `matchField` equals `matchValue`,
+   * if yes -> merge `updates` into current value and set with TTL. Returns true if updated.
+   */
+  setIfMatch(
+    key: string,
+    matchField: string,
+    matchValue: unknown,
+    updates: Record<string, unknown>,
+    ttlSeconds: number
+  ): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,6 +61,32 @@ export function createUpstashStore(config: {
       const redis = await getRedis();
       await redis.del(key);
     },
+    async setIfMatch(
+      key: string,
+      matchField: string,
+      matchValue: unknown,
+      updates: Record<string, unknown>,
+      ttlSeconds: number
+    ): Promise<boolean> {
+      const redis = await getRedis();
+      const luaScript = `
+        local current = redis.call('GET', KEYS[1])
+        if not current then return 0 end
+        local data = cjson.decode(current)
+        if tostring(data[ARGV[1]]) ~= ARGV[2] then return 0 end
+        for k, v in pairs(cjson.decode(ARGV[3])) do
+          data[k] = v
+        end
+        redis.call('SET', KEYS[1], cjson.encode(data), 'EX', tonumber(ARGV[4]))
+        return 1
+      `;
+      const result = await redis.eval(
+        luaScript,
+        [key],
+        [matchField, String(matchValue), JSON.stringify(updates), String(ttlSeconds)]
+      );
+      return result === 1;
+    },
   };
 }
 
@@ -83,6 +120,25 @@ export function createMemoryStore(): Store {
     },
     async del(key: string): Promise<void> {
       data.delete(key);
+    },
+    async setIfMatch(
+      key: string,
+      matchField: string,
+      matchValue: unknown,
+      updates: Record<string, unknown>,
+      ttlSeconds: number
+    ): Promise<boolean> {
+      prune(key);
+      const entry = data.get(key);
+      if (!entry) return false;
+      const current = entry.value as Record<string, unknown>;
+      if (String(current[matchField]) !== String(matchValue)) return false;
+      const updated = { ...current, ...updates };
+      data.set(key, {
+        value: updated,
+        expiresAt: Date.now() + ttlSeconds * 1000,
+      });
+      return true;
     },
   };
 }
@@ -217,6 +273,31 @@ export async function updatePayment(
   const remainingTtl = Math.max(PAYMENT_TTL - elapsed, 1);
 
   await store.set(`payment:${paymentId}`, updated, remainingTtl);
+}
+
+/**
+ * Atomically link a payment - only succeeds if payment status is "awaiting_code".
+ * Prevents race condition where two merchants link the same code.
+ */
+export async function atomicLinkPayment(
+  store: Store,
+  paymentId: string,
+  updates: Partial<PaymentData>
+): Promise<boolean> {
+  const existing = await getPayment(store, paymentId);
+  if (!existing) return false;
+
+  const elapsed = Math.floor((Date.now() - existing.createdAt) / 1000);
+  const remainingTtl = Math.max(PAYMENT_TTL - elapsed, 1);
+
+  const merged = { ...existing, ...updates };
+  return store.setIfMatch(
+    `payment:${paymentId}`,
+    "status",
+    "awaiting_code",
+    merged as unknown as Record<string, unknown>,
+    remainingTtl
+  );
 }
 
 // ---------------------------------------------------------------------------
