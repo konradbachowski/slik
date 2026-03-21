@@ -1,5 +1,7 @@
 export {
   PROGRAM_ID,
+  FEE_WALLET,
+  FEE_BPS,
   PAY_DISCRIMINATOR,
   RECEIPT_DISCRIMINATOR,
 } from "./constants";

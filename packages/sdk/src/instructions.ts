@@ -4,7 +4,7 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import { PROGRAM_ID, PAY_DISCRIMINATOR } from "./constants";
+import { PROGRAM_ID, PAY_DISCRIMINATOR, FEE_WALLET } from "./constants";
 import { uuidToBytes } from "./uuid";
 import { deriveReceiptPda } from "./pda";
 
@@ -43,6 +43,7 @@ export function buildPayInstruction(config: {
     keys: [
       { pubkey: customer, isSigner: true, isWritable: true },
       { pubkey: merchant, isSigner: false, isWritable: true },
+      { pubkey: FEE_WALLET, isSigner: false, isWritable: true },
       { pubkey: receiptPda, isSigner: false, isWritable: true },
       {
         pubkey: SystemProgram.programId,

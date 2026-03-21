@@ -30,6 +30,11 @@
           "writable": true
         },
         {
+          "name": "fee_wallet",
+          "writable": true,
+          "address": "2df3JmriVkhkBqdmYT2TgDBRo8E71WAJE1SbtLQ71Fkc"
+        },
+        {
           "name": "receipt",
           "writable": true,
           "pda": {
@@ -110,6 +115,11 @@
       "code": 6000,
       "name": "ZeroAmount",
       "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidFeeWallet",
+      "msg": "Invalid fee wallet address"
     }
   ],
   "types": [

