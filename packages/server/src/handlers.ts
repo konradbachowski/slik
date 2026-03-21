@@ -76,6 +76,7 @@ export async function handleResolveCode(
   status: string;
   paymentId?: string;
   amount?: number;
+  currency?: string;
   reference?: string;
 }> {
   const { code, wallet } = input;
@@ -113,6 +114,7 @@ export async function handleResolveCode(
       status: "paid",
       paymentId: codeData.paymentId,
       amount: payment.amount,
+      currency: payment.currency ?? "SOL",
     };
   }
 
@@ -120,6 +122,7 @@ export async function handleResolveCode(
   return {
     status: "linked",
     paymentId: codeData.paymentId,
+    currency: payment.currency ?? "SOL",
     amount: payment.amount,
     reference: payment.reference,
   };

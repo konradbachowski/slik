@@ -372,9 +372,9 @@ export default function Home() {
                 </span>
                 <span
                   className="text-lg font-semibold"
-                  style={{ color: "var(--text-secondary)" }}
+                  style={{ color: linkedPayment.currency === "USDC" ? "#2775ca" : "var(--text-secondary)" }}
                 >
-                  SOL
+                  {linkedPayment.currency ?? "SOL"}
                 </span>
               </div>
               {code && (
@@ -572,7 +572,7 @@ export default function Home() {
                     fontFamily: "var(--font-code)",
                   }}
                 >
-                  {paidAmount.toFixed(2)} SOL
+                  {paidAmount.toFixed(2)} {linkedPayment?.currency ?? "SOL"}
                 </p>
               )}
               <p

@@ -8,6 +8,7 @@ type CodeStatus = "idle" | "generating" | "active" | "linked" | "expired";
 interface LinkedPayment {
   paymentId: string;
   amount: number;
+  currency: "SOL" | "USDC";
   reference?: string;
 }
 
@@ -108,6 +109,7 @@ export function usePaymentCode(opts?: {
               status: string;
               paymentId: string;
               amount: number;
+              currency?: "SOL" | "USDC";
               reference?: string;
             };
             if (
@@ -118,6 +120,7 @@ export function usePaymentCode(opts?: {
               setLinkedPayment({
                 paymentId: resolveData.paymentId,
                 amount: resolveData.amount,
+                currency: resolveData.currency ?? "SOL",
                 reference: resolveData.reference,
               });
               setStatus("linked");
