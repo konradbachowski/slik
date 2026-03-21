@@ -1,6 +1,7 @@
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import {
   createPayTransaction,
+  createPayUsdcTransaction,
   deriveReceiptPda,
 } from "@slik-pay/sdk";
 import type { Store } from "./storage";
@@ -131,27 +132,43 @@ export async function handleResolveCode(
 /**
  * Create a new payment request.
  *
- * **`amount` MUST be denominated in SOL** (not lamports, not fiat).
- * The frontend is responsible for converting fiat to SOL before calling
+ * **`amount` MUST be denominated in SOL** (not lamports, not fiat) **or USDC**
+ * (human-readable, e.g. 25.00) depending on the `currency` field.
+ * The frontend is responsible for converting fiat to SOL/USDC before calling
  * this endpoint. The stored amount is passed directly to the on-chain
- * transfer instruction as `amountSol`.
+ * transfer instruction.
  */
 export async function handleCreatePayment(
   ctx: HandlerContext,
-  input: { amount: number; merchantWallet: string }
+  input: { amount: number; merchantWallet: string; currency?: "SOL" | "USDC" }
 ): Promise<{ paymentId: string; status: string }> {
-  const { amount, merchantWallet } = input;
+  const { amount, merchantWallet, currency = "SOL" } = input;
+
+  if (currency !== "SOL" && currency !== "USDC") {
+    throw new SlikError("Invalid currency. Must be SOL or USDC.", 400);
+  }
 
   if (typeof amount !== "number" || amount <= 0) {
     throw new SlikError("Invalid amount. Must be a positive number.", 400);
   }
 
-  if (amount < 0.001) {
-    throw new SlikError("Amount too small. Minimum is 0.001 SOL.", 400);
-  }
-
-  if (amount > 100) {
-    throw new SlikError("Amount exceeds maximum allowed (100 SOL).", 400);
+  if (currency === "USDC") {
+    if (amount < 0.01) {
+      throw new SlikError("Amount too small. Minimum is 0.01 USDC.", 400);
+    }
+    if (amount > 10000) {
+      throw new SlikError(
+        "Amount exceeds maximum allowed (10,000 USDC).",
+        400
+      );
+    }
+  } else {
+    if (amount < 0.001) {
+      throw new SlikError("Amount too small. Minimum is 0.001 SOL.", 400);
+    }
+    if (amount > 100) {
+      throw new SlikError("Amount exceeds maximum allowed (100 SOL).", 400);
+    }
   }
 
   if (!merchantWallet || typeof merchantWallet !== "string") {
@@ -164,7 +181,12 @@ export async function handleCreatePayment(
     throw new SlikError("Invalid merchant wallet address.", 400);
   }
 
-  const paymentId = await createPayment(ctx.store, amount, merchantWallet);
+  const paymentId = await createPayment(
+    ctx.store,
+    amount,
+    merchantWallet,
+    currency
+  );
 
   return { paymentId, status: "awaiting_code" };
 }
@@ -328,14 +350,31 @@ export async function handlePay(
 
   const merchantPubkey = new PublicKey(payment.merchantWallet);
 
-  // Build the pay transaction using the SDK
-  const { transaction, receiptPda } = await createPayTransaction({
-    customer: senderPubkey,
-    merchant: merchantPubkey,
-    amountSol: payment.amount,
-    paymentId,
-    connection: ctx.connection,
-  });
+  // Build the pay transaction using the SDK - branch on currency
+  let transaction: Transaction;
+  let receiptPda: PublicKey;
+
+  if (payment.currency === "USDC") {
+    const result = await createPayUsdcTransaction({
+      customer: senderPubkey,
+      merchant: merchantPubkey,
+      amountUsdc: payment.amount,
+      paymentId,
+      connection: ctx.connection,
+    });
+    transaction = result.transaction;
+    receiptPda = result.receiptPda;
+  } else {
+    const result = await createPayTransaction({
+      customer: senderPubkey,
+      merchant: merchantPubkey,
+      amountSol: payment.amount,
+      paymentId,
+      connection: ctx.connection,
+    });
+    transaction = result.transaction;
+    receiptPda = result.receiptPda;
+  }
 
   // Store receipt PDA reference in payment record
   const receiptPdaBase58 = receiptPda.toBase58();
@@ -352,7 +391,7 @@ export async function handlePay(
 
   return {
     transaction: serialized,
-    message: `Pay ${payment.amount} SOL via SLIK`,
+    message: `Pay ${payment.amount} ${payment.currency ?? "SOL"} via SLIK`,
     receiptPda: receiptPdaBase58,
   };
 }
