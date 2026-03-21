@@ -166,7 +166,7 @@ export function createSlikRoutes(config: SlikRoutesConfig) {
                   await config.store.set(
                     `lockout:resolve:${ip}`,
                     true,
-                    300
+                    {ex: 300}
                   );
                 }
               }

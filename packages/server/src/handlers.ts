@@ -61,10 +61,15 @@ export async function handleGenerateCode(
   try {
     new PublicKey(walletPubkey);
   } catch {
-    throw new SlikError("Invalid Solana public key format.", 400);
+    throw new SlikError("Invalid Solana public key.", 400);
   }
 
-  const code = await createPaymentCode(ctx.store, walletPubkey);
+  let code = "";
+  try {
+    code = await createPaymentCode(ctx.store, walletPubkey);
+  } catch (err) {
+    throw new SlikError("Failed to generate a unique code. Please try again.", 503);
+  }
 
   return { code, expiresIn: 120 };
 }

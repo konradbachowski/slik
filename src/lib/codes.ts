@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { v4 as uuidv4 } from "uuid";
+import { randomInt } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,9 +35,13 @@ const PAYMENT_TTL = 300; // 5 minutes
 // Storage abstraction: Redis or in-memory fallback
 // ---------------------------------------------------------------------------
 
+type SetOptions =
+  | { ex: number; nx: true; xx?: never }
+  | { ex: number; xx: true; nx?: never }
+  | { ex: number };
 interface Store {
   get<T>(key: string): Promise<T | null>;
-  set(key: string, value: unknown, ttlSeconds: number): Promise<void>;
+  set(key: string, value: unknown, options: SetOptions): Promise<boolean | void>;
   del(key: string): Promise<void>;
 }
 
@@ -51,8 +56,24 @@ function createRedisStore(): Store {
       const data = await redis.get<T>(key);
       return data ?? null;
     },
-    async set(key: string, value: unknown, ttlSeconds: number): Promise<void> {
-      await redis.set(key, value, { ex: ttlSeconds });
+    async set(key: string, value: unknown, options: SetOptions): Promise<boolean | void> {
+      let redisOptions: SetOptions;
+
+      // Both nx and xx are optional but only one can be set at a given time
+      if ("nx" in options) {
+        redisOptions = { ex: options.ex, nx: true };
+      } 
+      else if ("xx" in options) {
+        redisOptions = { ex: options.ex, xx: true };
+      } 
+      else {
+        redisOptions = { ex: options.ex };
+      }
+
+      const result = await redis.set(key, value, redisOptions);
+
+      // Redis returns "OK" when set() ends with a succes
+      return result === 'OK';
     },
     async del(key: string): Promise<void> {
       await redis.del(key);
@@ -78,10 +99,10 @@ function createMemoryStore(): Store {
       const entry = data.get(key);
       return entry ? (entry.value as T) : null;
     },
-    async set(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+    async set(key: string, value: unknown, options: SetOptions): Promise<void> {
       data.set(key, {
         value,
-        expiresAt: Date.now() + ttlSeconds * 1000,
+        expiresAt: Date.now() + options.ex * 1000
       });
     },
     async del(key: string): Promise<void> {
@@ -106,10 +127,11 @@ if (!hasRedis) {
 // Code helpers
 // ---------------------------------------------------------------------------
 
-/** Generate a random 6-digit numeric string (100000 - 999999). */
+/** Generate a cryptographically secure random 6-digit code string (000000–999999).
+ *  Always returns exactly 6 characters.
+ */
 export function generateCode(): string {
-  const code = 100000 + Math.floor(Math.random() * 900000);
-  return code.toString();
+  return randomInt(0, 1_000_000).toString().padStart(6, '0');
 }
 
 /**
@@ -119,16 +141,38 @@ export function generateCode(): string {
  * Returns the 6-digit code string.
  */
 export async function createPaymentCode(walletPubkey: string): Promise<string> {
-  const code = generateCode();
+  const MAX_RETRIES = 10;
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    const code = generateCode();
+  
+    const data: CodeData = {
+      walletPubkey,
+      createdAt: Date.now()
+    };
 
-  const data: CodeData = {
-    walletPubkey,
-    createdAt: Date.now(),
-  };
+    // dev
+    if (!hasRedis) {
+      await store.set(
+        `code:${code}`, 
+        data, 
+        {ex: CODE_TTL}
+      );
 
-  await store.set(`code:${code}`, data, CODE_TTL);
+      return code;
+    }
+  
+    const success = await store.set(
+      `code:${code}`, 
+      data, 
+      {ex: CODE_TTL, nx: true}
+    );
 
-  return code;
+    if (success) {
+      return code;
+    }
+  }
+
+  throw new Error(`Failed to generate unique payment code after ${MAX_RETRIES}`);
 }
 
 /**
@@ -160,7 +204,7 @@ export async function linkCodeToPayment(
   const elapsed = Math.floor((Date.now() - existing.createdAt) / 1000);
   const remainingTtl = Math.max(CODE_TTL - elapsed, 1);
 
-  await store.set(`code:${code}`, updated, remainingTtl);
+  await store.set(`code:${code}`, updated, {ex: remainingTtl});
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +225,7 @@ export async function createPayment(amount: number, merchantWallet: string): Pro
     createdAt: Date.now(),
   };
 
-  await store.set(`payment:${paymentId}`, data, PAYMENT_TTL);
+  await store.set(`payment:${paymentId}`, data, {ex: PAYMENT_TTL});
 
   return paymentId;
 }
@@ -213,6 +257,6 @@ export async function updatePayment(
   const elapsed = Math.floor((Date.now() - existing.createdAt) / 1000);
   const remainingTtl = Math.max(PAYMENT_TTL - elapsed, 1);
 
-  await store.set(`payment:${paymentId}`, updated, remainingTtl);
+  await store.set(`payment:${paymentId}`, updated, {ex: remainingTtl});
 }
 

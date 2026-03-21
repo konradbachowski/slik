@@ -1,4 +1,5 @@
 import type { CodeData, PaymentData } from "./types";
+import { randomInt } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // TTL constants (seconds)
@@ -10,10 +11,13 @@ const PAYMENT_TTL = 300; // 5 minutes
 // ---------------------------------------------------------------------------
 // Store interface
 // ---------------------------------------------------------------------------
-
+type SetOptions =
+  | { ex: number; nx: true; xx?: never }
+  | { ex: number; xx: true; nx?: never }
+  | { ex: number };
 export interface Store {
   get<T>(key: string): Promise<T | null>;
-  set(key: string, value: unknown, ttlSeconds: number): Promise<void>;
+  set(key: string, value: unknown, options: SetOptions): Promise<boolean | void>;
   del(key: string): Promise<void>;
   /**
    * Atomic compare-and-set: read current value, check if `matchField` equals `matchValue`,
@@ -55,9 +59,26 @@ export function createUpstashStore(config: {
       const data = await redis.get(key);
       return (data as T) ?? null;
     },
-    async set(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+    async set(key: string, value: unknown, options: SetOptions): Promise<boolean | void> {
       const redis = await getRedis();
-      await redis.set(key, value, { ex: ttlSeconds });
+
+      let redisOptions: SetOptions;
+
+      // Both nx and xx are optional but only one can be set at a given time
+      if ("nx" in options) {
+        redisOptions = { ex: options.ex, nx: true };
+      } 
+      else if ("xx" in options) {
+        redisOptions = { ex: options.ex, xx: true };
+      } 
+      else {
+        redisOptions = { ex: options.ex };
+      }
+
+      const result = await redis.set(key, value, redisOptions);
+
+      // Redis returns "OK" when set() ends with a succes
+      return result === 'OK';
     },
     async del(key: string): Promise<void> {
       const redis = await getRedis();
@@ -124,10 +145,10 @@ export function createMemoryStore(): Store {
       const entry = data.get(key);
       return entry ? (entry.value as T) : null;
     },
-    async set(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+    async set(key: string, value: unknown, options: SetOptions): Promise<void> {
       data.set(key, {
         value,
-        expiresAt: Date.now() + ttlSeconds * 1000,
+        expiresAt: Date.now() + options.ex * 1000,
       });
     },
     async del(key: string): Promise<void> {
@@ -169,12 +190,9 @@ export function createMemoryStore(): Store {
 // Code generation (crypto-secure)
 // ---------------------------------------------------------------------------
 
-/** Generate a random 6-digit numeric string (100000 - 999999). */
+/** Generate a random 6-digit numeric string (000000 - 999999). */
 export function generateCode(): string {
-  const array = new Uint32Array(1);
-  crypto.getRandomValues(array);
-  const code = 100000 + (array[0] % 900000);
-  return code.toString();
+  return randomInt(0, 1_000_000).toString().padStart(6, '0');
 }
 
 // ---------------------------------------------------------------------------
@@ -190,16 +208,27 @@ export async function createPaymentCode(
   store: Store,
   walletPubkey: string
 ): Promise<string> {
-  const code = generateCode();
+  const MAX_RETRIES = 10;
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    const code = generateCode();
+  
+    const data: CodeData = {
+      walletPubkey,
+      createdAt: Date.now(),
+    };
+  
+    const success = await store.set(
+      `code:${code}`, 
+      data, 
+      {ex: CODE_TTL, nx: true}
+    );
+  
+    if (success) {
+      return code;
+    }
+  }
 
-  const data: CodeData = {
-    walletPubkey,
-    createdAt: Date.now(),
-  };
-
-  await store.set(`code:${code}`, data, CODE_TTL);
-
-  return code;
+  throw new Error(`Failed to generate unique payment code after ${MAX_RETRIES}`);
 }
 
 /**
@@ -235,7 +264,7 @@ export async function linkCodeToPayment(
   const elapsed = Math.floor((Date.now() - existing.createdAt) / 1000);
   const remainingTtl = Math.max(CODE_TTL - elapsed, 1);
 
-  await store.set(`code:${code}`, updated, remainingTtl);
+  await store.set(`code:${code}`, updated, {ex: remainingTtl});
 }
 
 // ---------------------------------------------------------------------------
@@ -262,7 +291,7 @@ export async function createPayment(
     createdAt: Date.now(),
   };
 
-  await store.set(`payment:${paymentId}`, data, PAYMENT_TTL);
+  await store.set(`payment:${paymentId}`, data, {ex: PAYMENT_TTL});
 
   return paymentId;
 }
@@ -296,7 +325,7 @@ export async function updatePayment(
   const elapsed = Math.floor((Date.now() - existing.createdAt) / 1000);
   const remainingTtl = Math.max(PAYMENT_TTL - elapsed, 1);
 
-  await store.set(`payment:${paymentId}`, updated, remainingTtl);
+  await store.set(`payment:${paymentId}`, updated, {ex: remainingTtl});
 }
 
 /**
@@ -337,7 +366,7 @@ export async function setReferenceMapping(
   reference: string,
   paymentId: string
 ): Promise<void> {
-  await store.set(`ref:${reference}`, paymentId, PAYMENT_TTL);
+  await store.set(`ref:${reference}`, paymentId, {ex: PAYMENT_TTL});
 }
 
 /**
