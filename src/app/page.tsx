@@ -76,6 +76,7 @@ export default function Home() {
     setError(null);
 
     try {
+      // todo barel token
       const res = await fetch("/api/codes/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

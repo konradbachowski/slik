@@ -1,5 +1,7 @@
 import { Redis } from "@upstash/redis";
 import { v4 as uuidv4 } from "uuid";
+import crypto from 'crypto';
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,10 +108,21 @@ if (!hasRedis) {
 // Code helpers
 // ---------------------------------------------------------------------------
 
-/** Generate a random 6-digit numeric string (100000 - 999999). */
+// todo right now aroaund milion possibilities (120s) wich are not sotred in redis and not check
+// todo are the codes compared? do we have a fucntionality of searching for existing codes?
+// todo some logic that would allow even more possiblities - better scalability 
+/** Generate a cryptographically secure random 6-digit code string (000000–999999).
+ *  Always returns exactly 6 characters.
+ */
 export function generateCode(): string {
-  const code = 100000 + Math.floor(Math.random() * 900000);
-  return code.toString();
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+
+  // Modulo bias is negligible here: 2^32 / 1_000_000 = 4294.967…
+  // meaning values 0–999999 are extremely uniform
+  const code = array[0] % 1_000_000;
+
+  return code.toString().padStart(6, '0');
 }
 
 /**
