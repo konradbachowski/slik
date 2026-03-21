@@ -113,28 +113,50 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
       className="flex flex-col items-center w-full"
       style={{ animation: "fade-in-up 0.4s ease-out both" }}
     >
-      {/* SOL / USDC toggle */}
-      <div className="flex gap-2 mb-3">
+      {/* SOL / USDC pill toggle */}
+      <div
+        style={{
+          display: "inline-flex",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          borderRadius: 100,
+          padding: 3,
+          marginBottom: 12,
+          position: "relative",
+        }}
+      >
+        {/* Sliding indicator */}
+        <div
+          style={{
+            position: "absolute",
+            top: 3,
+            left: isUsdc ? "50%" : 3,
+            width: "calc(50% - 3px)",
+            height: "calc(100% - 6px)",
+            borderRadius: 100,
+            background: isUsdc ? "#2775ca" : "var(--primary)",
+            transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+        />
         {(["SOL", "USDC"] as PayCurrency[]).map((c) => (
           <button
             key={c}
             type="button"
             onClick={() => { setPayCurrency(c); setValue("0"); }}
-            className="px-5 py-2 text-sm font-bold cursor-pointer select-none"
             style={{
+              position: "relative",
+              zIndex: 1,
               fontFamily: "var(--font-code)",
-              borderRadius: "var(--radius-btn)",
-              backgroundColor:
-                payCurrency === c
-                  ? c === "USDC" ? "#2775ca" : "var(--primary)"
-                  : "var(--bg-card)",
-              color: payCurrency === c ? "#ffffff" : "var(--text-secondary)",
-              border:
-                payCurrency === c
-                  ? "1px solid transparent"
-                  : "1px solid var(--border)",
-              transition: "all 0.15s ease",
-              letterSpacing: "0.04em",
+              fontSize: 13,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              padding: "8px 24px",
+              borderRadius: 100,
+              border: "none",
+              background: "transparent",
+              color: payCurrency === c ? "#ffffff" : "var(--text-muted)",
+              cursor: "pointer",
+              transition: "color 0.2s ease",
             }}
           >
             {c}
