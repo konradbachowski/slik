@@ -16,7 +16,7 @@ export {
 export type { Store } from "./storage";
 
 // Handlers
-export { BlikError } from "./handlers";
+export { SlikError } from "./handlers";
 export type { HandlerContext } from "./handlers";
 export * as handlers from "./handlers";
 

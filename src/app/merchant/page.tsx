@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { useMerchantPayment } from "@solana-blik/sdk/react";
+import { useMerchantPayment } from "@slik-pay/sdk/react";
 import AmountInput from "@/components/AmountInput";
 import CodeInput from "@/components/CodeInput";
 import { WalletButton } from "@/components/WalletButton";
@@ -132,7 +132,7 @@ export default function MerchantTerminal() {
               letterSpacing: "0.12em",
             }}
           >
-            SolanaBLIK
+            SLIK
           </span>
         </div>
 

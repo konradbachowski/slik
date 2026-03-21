@@ -1,12 +1,12 @@
 [package]
-name = "solanablik"
+name = "slik"
 version = "0.1.0"
-description = "SolanaBLIK - BLIK-style payments on Solana"
+description = "SLIK - 6-code payments on Solana (inspired by BLIK)"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "solanablik"
+name = "slik"
 
 [features]
 no-entrypoint = []

@@ -41,7 +41,7 @@ export async function getSolPrice(
     cache = { prices, fetchedAt: Date.now() };
     return currency ? prices[currency] : prices;
   } catch (err) {
-    console.error("[solana-blik/price] Failed to fetch SOL price:", err);
+    console.error("[slik/price] Failed to fetch SOL price:", err);
     // Fallback prices if API fails
     if (cache) {
       return currency ? cache.prices[currency] : cache.prices;

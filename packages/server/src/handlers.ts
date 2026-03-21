@@ -2,7 +2,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import {
   createPayTransaction,
   deriveReceiptPda,
-} from "@solana-blik/sdk";
+} from "@slik-pay/sdk";
 import type { Store } from "./storage";
 import {
   createPaymentCode,
@@ -19,13 +19,13 @@ import {
 // Error type
 // ---------------------------------------------------------------------------
 
-export class BlikError extends Error {
+export class SlikError extends Error {
   constructor(
     message: string,
     public statusCode: number
   ) {
     super(message);
-    this.name = "BlikError";
+    this.name = "SlikError";
   }
 }
 
@@ -49,14 +49,14 @@ export async function handleGenerateCode(
   const { walletPubkey } = input;
 
   if (!walletPubkey || typeof walletPubkey !== "string") {
-    throw new BlikError("Missing or invalid walletPubkey.", 400);
+    throw new SlikError("Missing or invalid walletPubkey.", 400);
   }
 
   // Validate that it's a legit Solana public key
   try {
     new PublicKey(walletPubkey);
   } catch {
-    throw new BlikError("Invalid Solana public key format.", 400);
+    throw new SlikError("Invalid Solana public key format.", 400);
   }
 
   const code = await createPaymentCode(ctx.store, walletPubkey);
@@ -80,11 +80,11 @@ export async function handleResolveCode(
   const { code, wallet } = input;
 
   if (!code || !/^\d{6}$/.test(code)) {
-    throw new BlikError("Invalid code format. Must be 6 digits.", 400);
+    throw new SlikError("Invalid code format. Must be 6 digits.", 400);
   }
 
   if (!wallet || typeof wallet !== "string") {
-    throw new BlikError("Missing wallet parameter.", 400);
+    throw new SlikError("Missing wallet parameter.", 400);
   }
 
   const codeData = await resolveCode(ctx.store, code);
@@ -92,7 +92,7 @@ export async function handleResolveCode(
   // Return same 404 whether code doesn't exist or wallet doesn't match
   // (prevents information leakage about which codes are active)
   if (!codeData || codeData.walletPubkey !== wallet) {
-    throw new BlikError("Code not found or expired.", 404);
+    throw new SlikError("Code not found or expired.", 404);
   }
 
   // Code exists but hasn't been linked to a payment yet
@@ -143,25 +143,25 @@ export async function handleCreatePayment(
   const { amount, merchantWallet } = input;
 
   if (typeof amount !== "number" || amount <= 0) {
-    throw new BlikError("Invalid amount. Must be a positive number.", 400);
+    throw new SlikError("Invalid amount. Must be a positive number.", 400);
   }
 
   if (amount < 0.001) {
-    throw new BlikError("Amount too small. Minimum is 0.001 SOL.", 400);
+    throw new SlikError("Amount too small. Minimum is 0.001 SOL.", 400);
   }
 
   if (amount > 100) {
-    throw new BlikError("Amount exceeds maximum allowed (100 SOL).", 400);
+    throw new SlikError("Amount exceeds maximum allowed (100 SOL).", 400);
   }
 
   if (!merchantWallet || typeof merchantWallet !== "string") {
-    throw new BlikError("Missing merchantWallet.", 400);
+    throw new SlikError("Missing merchantWallet.", 400);
   }
 
   try {
     new PublicKey(merchantWallet);
   } catch {
-    throw new BlikError("Invalid merchant wallet address.", 400);
+    throw new SlikError("Invalid merchant wallet address.", 400);
   }
 
   const paymentId = await createPayment(ctx.store, amount, merchantWallet);
@@ -186,26 +186,26 @@ export async function handleLinkPayment(
   const { paymentId, code } = input;
 
   if (!paymentId || typeof paymentId !== "string") {
-    throw new BlikError("Missing or invalid paymentId.", 400);
+    throw new SlikError("Missing or invalid paymentId.", 400);
   }
 
   if (!code || typeof code !== "string" || !/^\d{6}$/.test(code)) {
-    throw new BlikError("Invalid code. Must be a 6-digit number.", 400);
+    throw new SlikError("Invalid code. Must be a 6-digit number.", 400);
   }
 
   const codeData = await resolveCode(ctx.store, code);
   if (!codeData) {
-    throw new BlikError("Code not found or expired.", 404);
+    throw new SlikError("Code not found or expired.", 404);
   }
 
   const payment = await getPayment(ctx.store, paymentId);
   if (!payment) {
-    throw new BlikError("Payment not found or expired.", 404);
+    throw new SlikError("Payment not found or expired.", 404);
   }
 
   // Fast-fail status check before PDA derivation
   if (payment.status !== "awaiting_code") {
-    throw new BlikError(
+    throw new SlikError(
       `Payment cannot be linked. Current status: ${payment.status}`,
       409
     );
@@ -224,7 +224,7 @@ export async function handleLinkPayment(
   });
 
   if (!linked) {
-    throw new BlikError("Payment was already linked by another request.", 409);
+    throw new SlikError("Payment was already linked by another request.", 409);
   }
 
   // Non-critical: link code record and store reference mapping
@@ -256,13 +256,13 @@ export async function handlePaymentStatus(
   const { paymentId } = input;
 
   if (!paymentId) {
-    throw new BlikError("Missing payment ID.", 400);
+    throw new SlikError("Missing payment ID.", 400);
   }
 
   const payment = await getPayment(ctx.store, paymentId);
 
   if (!payment) {
-    throw new BlikError("Payment not found or expired.", 404);
+    throw new SlikError("Payment not found or expired.", 404);
   }
 
   // Lazy on-chain check: if payment is linked and has a receipt PDA reference,
@@ -300,27 +300,27 @@ export async function handlePay(
   const { paymentId, account } = input;
 
   if (!paymentId) {
-    throw new BlikError("Missing paymentId.", 400);
+    throw new SlikError("Missing paymentId.", 400);
   }
 
   if (!account || typeof account !== "string") {
-    throw new BlikError("Missing or invalid account in request body.", 400);
+    throw new SlikError("Missing or invalid account in request body.", 400);
   }
 
   let senderPubkey: PublicKey;
   try {
     senderPubkey = new PublicKey(account);
   } catch {
-    throw new BlikError("Invalid Solana public key.", 400);
+    throw new SlikError("Invalid Solana public key.", 400);
   }
 
   const payment = await getPayment(ctx.store, paymentId);
   if (!payment) {
-    throw new BlikError("Payment not found or expired.", 404);
+    throw new SlikError("Payment not found or expired.", 404);
   }
 
   if (payment.status !== "linked") {
-    throw new BlikError(
+    throw new SlikError(
       `Payment is not ready for transaction. Current status: ${payment.status}`,
       409
     );
@@ -352,7 +352,7 @@ export async function handlePay(
 
   return {
     transaction: serialized,
-    message: `Pay ${payment.amount} SOL via SolanaBLIK`,
+    message: `Pay ${payment.amount} SOL via SLIK`,
     receiptPda: receiptPdaBase58,
   };
 }

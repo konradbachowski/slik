@@ -8,11 +8,11 @@ const FEE_WALLET: Pubkey = pubkey!("2df3JmriVkhkBqdmYT2TgDBRo8E71WAJE1SbtLQ71Fkc
 const FEE_BPS: u64 = 20; // 0.2% = 20 basis points
 
 #[program]
-pub mod solanablik {
+pub mod slik {
     use super::*;
 
     pub fn pay(ctx: Context<Pay>, amount: u64, payment_id: [u8; 16]) -> Result<()> {
-        require!(amount > 0, BlikError::ZeroAmount);
+        require!(amount > 0, SlikError::ZeroAmount);
 
         // Calculate fee (0.2% = amount * 20 / 10000)
         let fee = amount.checked_mul(FEE_BPS).unwrap().checked_div(10000).unwrap();
@@ -75,10 +75,10 @@ pub struct Pay<'info> {
     #[account(mut)]
     pub merchant: UncheckedAccount<'info>,
 
-    /// CHECK: SolanaBLIK protocol fee recipient
+    /// CHECK: SLIK protocol fee recipient
     #[account(
         mut,
-        address = FEE_WALLET @ BlikError::InvalidFeeWallet
+        address = FEE_WALLET @ SlikError::InvalidFeeWallet
     )]
     pub fee_wallet: UncheckedAccount<'info>,
 
@@ -115,7 +115,7 @@ pub struct PaymentCompleted {
 }
 
 #[error_code]
-pub enum BlikError {
+pub enum SlikError {
     #[msg("Amount must be greater than zero")]
     ZeroAmount,
     #[msg("Invalid fee wallet address")]

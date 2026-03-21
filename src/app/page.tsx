@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { usePaymentCode, useBlikPay } from "@solana-blik/sdk/react";
+import { usePaymentCode, useSlikPay } from "@slik-pay/sdk/react";
 import { WalletButton } from "@/components/WalletButton";
 import { CodeDisplay } from "@/components/CodeDisplay";
 
@@ -36,7 +36,7 @@ export default function Home() {
     error: payError,
     pay,
     reset: payReset,
-  } = useBlikPay();
+  } = useSlikPay();
 
   // Derive view state from hook statuses
   function getViewState(): ViewState {
@@ -131,7 +131,7 @@ export default function Home() {
               className="text-xl font-bold tracking-tight"
               style={{ color: "var(--text)" }}
             >
-              SolanaBLIK
+              SLIK
             </h1>
           </div>
           <p

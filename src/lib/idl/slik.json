@@ -1,10 +1,10 @@
 {
   "address": "AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv",
   "metadata": {
-    "name": "solanablik",
+    "name": "slik",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "SolanaBLIK - BLIK-style payments on Solana"
+    "description": "SLIK - 6-code payments on Solana (inspired by BLIK)"
   },
   "instructions": [
     {
@@ -28,11 +28,6 @@
         {
           "name": "merchant",
           "writable": true
-        },
-        {
-          "name": "fee_wallet",
-          "writable": true,
-          "address": "2df3JmriVkhkBqdmYT2TgDBRo8E71WAJE1SbtLQ71Fkc"
         },
         {
           "name": "receipt",
@@ -115,11 +110,6 @@
       "code": 6000,
       "name": "ZeroAmount",
       "msg": "Amount must be greater than zero"
-    },
-    {
-      "code": 6001,
-      "name": "InvalidFeeWallet",
-      "msg": "Invalid fee wallet address"
     }
   ],
   "types": [

@@ -6,7 +6,7 @@ seeds = true
 skip-lint = false
 
 [programs.devnet]
-solanablik = "AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv"
+slik = "AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv"
 
 [registry]
 url = "https://api.apr.dev"

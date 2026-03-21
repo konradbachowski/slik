@@ -13,7 +13,7 @@ type PayStatus =
   | "paid"
   | "error";
 
-export interface UseBlikPayReturn {
+export interface UseSlikPayReturn {
   status: PayStatus;
   error: string | null;
   pay: (opts: {
@@ -39,7 +39,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
-export function useBlikPay(): UseBlikPayReturn {
+export function useSlikPay(): UseSlikPayReturn {
   const [status, setStatus] = useState<PayStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const statusRef = useRef<PayStatus>("idle");

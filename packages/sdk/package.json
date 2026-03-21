@@ -1,7 +1,7 @@
 {
-  "name": "@solana-blik/sdk",
+  "name": "@slik-pay/sdk",
   "version": "0.1.0",
-  "description": "SolanaBLIK SDK - BLIK-style payments on Solana",
+  "description": "SLIK SDK - 6-code payments on Solana (inspired by BLIK)",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/konradbachowski/solana-blik.git",
+    "url": "https://github.com/konradbachowski/slik.git",
     "directory": "packages/sdk"
   },
   "publishConfig": {

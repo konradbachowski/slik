@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { Connection } from "@solana/web3.js";
 import { deriveReceiptPda } from "../pda";
-import { useBlikContextOptional } from "./BlikProvider";
+import { useSlikContextOptional } from "./SlikProvider";
 
 type MerchantStatus =
   | "idle"
@@ -28,11 +28,11 @@ export function useMerchantPayment(opts: {
   apiBaseUrl?: string;
   connection: Connection;
 }): UseMerchantPaymentReturn {
-  const ctx = useBlikContextOptional();
+  const ctx = useSlikContextOptional();
   const apiBaseUrl = opts.apiBaseUrl ?? ctx?.apiBaseUrl;
   if (!apiBaseUrl) {
     throw new Error(
-      "apiBaseUrl is required - pass it as a prop or wrap with <BlikProvider>"
+      "apiBaseUrl is required - pass it as a prop or wrap with <SlikProvider>"
     );
   }
 

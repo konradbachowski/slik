@@ -1,5 +1,5 @@
-import { createBlikRoutes } from "@solana-blik/server/nextjs";
-import { createUpstashStore, createMemoryStore } from "@solana-blik/server";
+import { createSlikRoutes } from "@slik-pay/server/nextjs";
+import { createUpstashStore, createMemoryStore } from "@slik-pay/server";
 import { Connection, clusterApiUrl } from "@solana/web3.js";
 
 const SOLANA_NETWORK = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet") as
@@ -23,8 +23,8 @@ const store = hasRedis
 
 if (!hasRedis) {
   console.warn(
-    "[solana-blik] No Redis configured - using in-memory store (dev only)"
+    "[slik] No Redis configured - using in-memory store (dev only)"
   );
 }
 
-export const { GET, POST } = createBlikRoutes({ store, connection });
+export const { GET, POST } = createSlikRoutes({ store, connection });

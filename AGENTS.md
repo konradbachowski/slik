@@ -4,16 +4,16 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# SolanaBLIK - Architecture
+# SLIK - Architecture
 
 ## Structure
 
 ```
-solana-blik/
-├── programs/solanablik/        # Anchor smart contract (Rust)
+slik/
+├── programs/slik/             # Anchor smart contract (Rust)
 ├── packages/
-│   ├── sdk/                    # @solana-blik/sdk - on-chain SDK (TS)
-│   └── server/                 # @solana-blik/server - backend handlers
+│   ├── sdk/                    # @slik-pay/sdk - on-chain SDK (TS)
+│   └── server/                 # @slik-pay/server - backend handlers
 ├── src/                        # Next.js demo app (uses packages)
 └── target/idl/                 # Generated IDL (anchor build)
 ```
