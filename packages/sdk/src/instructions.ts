@@ -5,6 +5,10 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import {
   PROGRAM_ID,
   PAY_DISCRIMINATOR,
   PAY_USDC_DISCRIMINATOR,
@@ -78,10 +82,6 @@ export function buildPayUsdcInstruction(config: {
     paymentId,
     programId = PROGRAM_ID,
   } = config;
-
-  // Lazy import - keeps @solana/spl-token optional, prevents breaking SOL payments if missing
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } = require("@solana/spl-token") as typeof import("@solana/spl-token");
 
   const paymentIdBytes = uuidToBytes(paymentId);
   const atomicAmount = BigInt(Math.round(amountUsdc * 10 ** USDC_DECIMALS));

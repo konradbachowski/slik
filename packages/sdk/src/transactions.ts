@@ -1,6 +1,10 @@
 import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import { 
+  getAssociatedTokenAddressSync, 
+  createAssociatedTokenAccountInstruction 
+} from "@solana/spl-token";
 import { buildPayInstruction, buildPayUsdcInstruction } from "./instructions";
-import { PROGRAM_ID } from "./constants";
+import { PROGRAM_ID, USDC_MINT, FEE_WALLET } from "./constants";
 
 export async function createPayTransaction(config: {
   customer: PublicKey;
@@ -66,6 +70,14 @@ export async function createPayUsdcTransaction(config: {
     programId,
   });
 
+  const merchantUsdc = getAssociatedTokenAddressSync(USDC_MINT, merchant);
+  const feeUsdc = getAssociatedTokenAddressSync(USDC_MINT, FEE_WALLET);
+
+  const [merchantAccount, feeAccount] = await connection.getMultipleAccountsInfo([
+    merchantUsdc,
+    feeUsdc,
+  ]);
+
   const { blockhash, lastValidBlockHeight } =
     await connection.getLatestBlockhash("confirmed");
 
@@ -74,6 +86,28 @@ export async function createPayUsdcTransaction(config: {
     lastValidBlockHeight,
     feePayer: customer,
   });
+
+  if (!merchantAccount) {
+    transaction.add(
+      createAssociatedTokenAccountInstruction(
+        customer,
+        merchantUsdc,
+        merchant,
+        USDC_MINT
+      )
+    );
+  }
+
+  if (!feeAccount) {
+    transaction.add(
+      createAssociatedTokenAccountInstruction(
+        customer,
+        feeUsdc,
+        FEE_WALLET,
+        USDC_MINT
+      )
+    );
+  }
 
   transaction.add(instruction);
 
