@@ -107,6 +107,16 @@ const { pay, status: payStatus } = useSlikPay();
 const { createPayment, linkCode, status } = useMerchantPayment({ apiBaseUrl: "/api", connection });
 ```
 
+### Hosted payment page
+
+If you don't want to build your own customer UI, redirect users to the hosted payment page:
+
+```
+https://solana-blik.vercel.app/pay
+```
+
+The customer connects their wallet, generates a 6-digit code, and approves the payment. Works with any merchant terminal that uses the SLIK API.
+
 ### `@slik-pay/server` — backend handlers
 
 Framework-agnostic payment handlers + storage adapters. One catch-all route replaces 7 API endpoints.
