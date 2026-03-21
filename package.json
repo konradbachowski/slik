@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build:packages": "cd packages/sdk && npx tsup && cd ../server && npx tsup",
+    "build": "npm run build:packages && next build",
     "start": "next start"
   },
   "dependencies": {
@@ -16,6 +17,9 @@
     "@solana/wallet-adapter-react-ui": "^0.9.39",
     "@solana/wallet-adapter-wallets": "^0.19.37",
     "@solana/web3.js": "^1.98.4",
+    "@solana-blik/sdk": "file:./packages/sdk",
+    "@solana-blik/server": "file:./packages/server",
+    "tsup": "^8.0.0",
     "@upstash/redis": "^1.37.0",
     "bignumber.js": "^10.0.2",
     "crypto": "^1.0.1",

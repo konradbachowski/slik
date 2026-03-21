@@ -1,0 +1,49 @@
+{
+  "name": "@solana-blik/server",
+  "version": "0.1.0",
+  "description": "SolanaBLIK server-side handlers and storage adapters",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./nextjs": {
+      "types": "./dist/adapters/nextjs.d.ts",
+      "import": "./dist/adapters/nextjs.mjs",
+      "require": "./dist/adapters/nextjs.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/konradbachowski/solana-blik.git",
+    "directory": "packages/server"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@solana/web3.js": "^1.90.0",
+    "@upstash/redis": "^1.37.0"
+  },
+  "peerDependenciesMeta": {
+    "@upstash/redis": { "optional": true }
+  },
+  "dependencies": {
+    "@solana-blik/sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "files": ["dist"],
+  "license": "MIT"
+}

@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { usePaymentCode, useBlikPay } from "@solana-blik/sdk/react";
 import { WalletButton } from "@/components/WalletButton";
 import { CodeDisplay } from "@/components/CodeDisplay";
-import { deriveReceiptPda, uuidToBytes } from "@/lib/program";
 
-type AppState =
+type ViewState =
   | "disconnected"
   | "connected"
   | "generating"
@@ -18,276 +17,81 @@ type AppState =
   | "paid"
   | "error";
 
-interface LinkedPayment {
-  paymentId: string;
-  amount: number;
-  reference?: string;
-  receiptPda?: string;
-}
-
 export default function Home() {
   const { publicKey, connected, sendTransaction } = useWallet();
   const { connection } = useConnection();
 
-  const [state, setState] = useState<AppState>("disconnected");
-  const [code, setCode] = useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = useState<number>(0);
-  const [linkedPayment, setLinkedPayment] = useState<LinkedPayment | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [paidAmount, setPaidAmount] = useState<number | null>(null);
+  const {
+    code,
+    expiresAt,
+    status: codeStatus,
+    linkedPayment,
+    error: codeError,
+    generate,
+    reset: codeReset,
+  } = usePaymentCode({ apiBaseUrl: "/api" });
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const wsSubRef = useRef<number | null>(null);
+  const {
+    status: payStatus,
+    error: payError,
+    pay,
+    reset: payReset,
+  } = useBlikPay();
 
-  // Sync wallet connection state
-  useEffect(() => {
-    if (connected && publicKey) {
-      if (state === "disconnected") {
-        setState("connected");
-      }
-    } else {
-      // Wallet disconnected - reset everything
-      setState("disconnected");
-      setCode(null);
-      setLinkedPayment(null);
-      setError(null);
-      stopPolling();
-      stopStatusPolling();
-      stopWsSubscription();
-    }
-  }, [connected, publicKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function stopPolling() {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
+  // Derive view state from hook statuses
+  function getViewState(): ViewState {
+    if (!connected) return "disconnected";
+    if (payStatus === "paid") return "paid";
+    if (payStatus === "confirming") return "confirming";
+    if (payStatus === "signing" || payStatus === "building") return "signing";
+    if (payStatus === "error") return "error";
+    if (codeError) return "error";
+    if (codeStatus === "linked") return "linked";
+    if (codeStatus === "active") return "code_active";
+    if (codeStatus === "generating") return "generating";
+    return "connected";
   }
 
-  function stopStatusPolling() {
-    if (statusPollRef.current) {
-      clearInterval(statusPollRef.current);
-      statusPollRef.current = null;
-    }
-  }
-
-  function stopWsSubscription() {
-    if (wsSubRef.current !== null) {
-      connection.removeAccountChangeListener(wsSubRef.current);
-      wsSubRef.current = null;
-    }
-  }
+  const state = getViewState();
+  const error = payError || codeError;
 
   // Generate a payment code
-  const generateCode = useCallback(async () => {
+  const generateCode = useCallback(() => {
     if (!publicKey) return;
+    generate(publicKey.toBase58());
+  }, [publicKey, generate]);
 
-    setState("generating");
-    setError(null);
-
-    try {
-      // todo barel token
-      const res = await fetch("/api/codes/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletPubkey: publicKey.toBase58() }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to generate code");
-      }
-
-      const data = await res.json();
-      const newCode = data.code as string;
-      const ttl = (data.expiresIn as number) || 120;
-
-      setCode(newCode);
-      setExpiresAt(Date.now() + ttl * 1000);
-      setState("code_active");
-
-      // Start polling for code resolution (merchant linking)
-      stopPolling();
-      pollRef.current = setInterval(async () => {
-        try {
-          const resolveRes = await fetch(`/api/codes/${newCode}/resolve`);
-          if (!resolveRes.ok) {
-            // 404 = expired, stop polling
-            if (resolveRes.status === 404) {
-              stopPolling();
-              return;
-            }
-            return;
-          }
-
-          const resolveData = await resolveRes.json();
-
-          if (resolveData.status === "linked") {
-            stopPolling();
-            setLinkedPayment({
-              paymentId: resolveData.paymentId,
-              amount: resolveData.amount,
-              reference: resolveData.reference,
-              receiptPda: resolveData.receiptPda,
-            });
-            setState("linked");
-          } else if (resolveData.status === "paid") {
-            stopPolling();
-            setPaidAmount(resolveData.amount);
-            setState("paid");
-          }
-        } catch {
-          // Silently retry on network errors
-        }
-      }, 1000);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Something went wrong";
-      setError(message);
-      setState("error");
-    }
-  }, [publicKey]);
-
-  // Handle code expiry
+  // Handle code expiry (CodeDisplay calls this)
   const handleExpired = useCallback(() => {
-    stopPolling();
-    // Don't change state - CodeDisplay handles the expired UI
-    // User will click "Generate new code" which resets everything
+    // No-op: the hook handles polling cleanup internally.
+    // CodeDisplay shows its own expired UI.
   }, []);
 
   // Approve and sign the payment transaction
-  const approvePayment = useCallback(async () => {
+  const approvePayment = useCallback(() => {
     if (!linkedPayment || !publicKey || !sendTransaction) return;
-
-    setState("signing");
-    setError(null);
-
-    try {
-      // Request the transaction from the server
-      const res = await fetch(
-        `/api/pay?paymentId=${linkedPayment.paymentId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ account: publicKey.toBase58() }),
-        }
-      );
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to create transaction");
-      }
-
-      const data = await res.json();
-      const txBuffer = Buffer.from(data.transaction, "base64");
-      const transaction = Transaction.from(txBuffer);
-
-      // Resolve the receipt PDA address for WebSocket subscription.
-      // Prefer the PDA returned from /api/pay, fall back to the one
-      // stored during linking, and finally derive client-side.
-      const receiptPdaStr =
-        data.receiptPda ||
-        linkedPayment.receiptPda;
-      let receiptPdaAddress: PublicKey | null = null;
-      if (receiptPdaStr) {
-        try {
-          receiptPdaAddress = new PublicKey(receiptPdaStr);
-        } catch {
-          // Invalid key string — fall back to derivation
-        }
-      }
-      if (!receiptPdaAddress) {
-        const [derived] = deriveReceiptPda(uuidToBytes(linkedPayment.paymentId));
-        receiptPdaAddress = derived;
-      }
-
-      // Send the transaction through the wallet
-      const signature = await sendTransaction(transaction, connection);
-
-      setState("confirming");
-
-      // --- Primary: WebSocket subscription on receipt PDA ---
-      stopWsSubscription();
-      wsSubRef.current = connection.onAccountChange(
-        receiptPdaAddress,
-        (accountInfo) => {
-          // Receipt account created (data.length > 0) means payment confirmed
-          if (accountInfo.data.length > 0) {
-            stopWsSubscription();
-            stopStatusPolling();
-            setPaidAmount(linkedPayment.amount);
-            setState("paid");
-          }
-        },
-        "confirmed"
-      );
-
-      // --- Fallback: Poll payment status every 3s ---
-      stopStatusPolling();
-      statusPollRef.current = setInterval(async () => {
-        try {
-          const statusRes = await fetch(
-            `/api/payments/${linkedPayment.paymentId}/status`
-          );
-          if (!statusRes.ok) return;
-
-          const statusData = await statusRes.json();
-          if (statusData.status === "paid") {
-            stopStatusPolling();
-            stopWsSubscription();
-            setPaidAmount(linkedPayment.amount);
-            setState("paid");
-          }
-        } catch {
-          // Retry silently
-        }
-      }, 3000);
-
-      // --- Secondary fallback: confirmTransaction via RPC ---
-      try {
-        await connection.confirmTransaction(signature, "confirmed");
-        // Give the WebSocket / backend a moment to catch up
-        setTimeout(() => {
-          stopStatusPolling();
-          stopWsSubscription();
-          setPaidAmount(linkedPayment.amount);
-          setState("paid");
-        }, 2000);
-      } catch {
-        // WebSocket or backend poll will catch it
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Transaction failed";
-      setError(message);
-      setState("linked"); // Go back to linked state so user can retry
-    }
-  }, [linkedPayment, publicKey, sendTransaction, connection]);
+    pay({
+      paymentId: linkedPayment.paymentId,
+      apiBaseUrl: "/api",
+      customerPubkey: publicKey,
+      connection,
+      sendTransaction,
+    });
+  }, [linkedPayment, publicKey, sendTransaction, connection, pay]);
 
   // Reset to generate a new code
   const resetToConnected = useCallback(() => {
-    stopPolling();
-    stopStatusPolling();
-    stopWsSubscription();
-    setCode(null);
-    setLinkedPayment(null);
-    setError(null);
-    setPaidAmount(null);
-    setState("connected");
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopPolling();
-      stopStatusPolling();
-      stopWsSubscription();
-    };
-  }, []);
+    codeReset();
+    payReset();
+  }, [codeReset, payReset]);
 
   // Truncate wallet address for display
   const walletAddress = publicKey
     ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
     : "";
+
+  // Amount to display in paid state (from linkedPayment since hooks hold it)
+  const paidAmount = linkedPayment?.amount ?? null;
 
   return (
     <main className="relative z-10 flex-1 flex items-center justify-center p-4">

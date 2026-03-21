@@ -1,8 +1,9 @@
 # SolanaBLIK
 
-Payment gateway inspired by [BLIK](https://en.wikipedia.org/wiki/Blik) (Polish instant payment system) built on Solana. Merchant enters amount, customer generates a 6-digit code, merchant types the code, customer approves in wallet, SOL is transferred instantly.
+Payment gateway inspired by [BLIK](https://en.wikipedia.org/wiki/Blik) (Polish instant payment system) built on Solana with a custom Anchor program. Merchant enters amount, customer generates a 6-digit code, merchant types the code, customer approves in wallet, SOL is transferred atomically with an on-chain receipt.
 
 **Live:** https://solana-blik.vercel.app
+**Program:** [`AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv`](https://explorer.solana.com/address/AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv?cluster=devnet) (devnet)
 
 ## How it works
 
@@ -20,40 +21,183 @@ Merchant                                Customer
    → code linked to payment
                                         8. See payment request + amount
                                         9. Approve in wallet
-                                           → SOL transferred to merchant
-10. Payment confirmed
+                                           → Anchor program executes:
+                                             SOL transfer + receipt PDA + event
+10. Payment confirmed (instant via WebSocket)
 ```
 
 Two screens:
 - `/` - customer (payer) interface
 - `/merchant` - merchant (receiver) terminal
 
+## Architecture
+
+Hybrid design — server handles what it does best (codes, matching, prices), Anchor program handles what blockchain does best (atomic payments, on-chain proof).
+
+```
+Off-chain (Next.js + Redis)              On-chain (Anchor program)
+───────────────────────────              ─────────────────────────
+• 6-digit code generation                • Atomic SOL transfer
+• Code ↔ payment matching               • Receipt PDA (permanent proof)
+• Fiat price feed (CoinGecko)            • PaymentCompleted event
+• Rate limiting, validation              • Double-payment prevention
+```
+
+### Payment confirmation
+
+Uses WebSocket subscription on the receipt PDA (`connection.onAccountChange`). When the Anchor program creates the receipt account on-chain, both merchant and customer get instant notification (~400ms). HTTP polling at 3s serves as fallback if WebSocket drops.
+
+## Anchor Program
+
+Single instruction `pay(amount, payment_id)`:
+
+1. Transfers SOL from customer to merchant via `system_program::transfer`
+2. Creates a receipt PDA (seeds: `["receipt", payment_id]`) — permanent on-chain proof
+3. Emits `PaymentCompleted` event for WebSocket listeners
+
+Receipt PDA stores: customer, merchant, amount, payment_id, timestamp, bump.
+
+```
+programs/solanablik/src/lib.rs    # Program source
+target/idl/solanablik.json        # Generated IDL
+src/lib/idl/                      # IDL + types (copied for frontend)
+```
+
+## SDK
+
+SolanaBLIK ships as two npm packages so any app can integrate BLIK-style payments:
+
+### `@solana-blik/sdk` — on-chain client
+
+Transaction building, PDA derivation, receipt verification, React hooks. No `@coral-xyz/anchor` runtime — instructions are built manually for minimal bundle size.
+
+```bash
+# From this monorepo (file: dependency)
+npm install @solana-blik/sdk@file:./packages/sdk @solana/web3.js
+
+# Or clone and link
+git clone https://github.com/konradbachowski/solana-blik.git
+cd solana-blik/packages/sdk && npm install && npm run build
+```
+
+```typescript
+import { createPayTransaction, deriveReceiptPda, fetchReceipt, watchReceipt } from "@solana-blik/sdk";
+
+// Build a pay transaction
+const { transaction, receiptPda } = await createPayTransaction({
+  customer: customerPubkey,
+  merchant: merchantPubkey,
+  amountSol: 0.5,
+  paymentId: "550e8400-e29b-41d4-a716-446655440000",
+  connection,
+});
+
+// Watch for on-chain confirmation (WebSocket)
+const unsubscribe = watchReceipt(connection, paymentId, {
+  onConfirmed: (receipt) => console.log("Paid!", receipt.amountSol, "SOL"),
+  timeoutMs: 120_000,
+});
+```
+
+**React hooks** (`@solana-blik/sdk/react`):
+
+```tsx
+import { usePaymentCode, useBlikPay, useMerchantPayment } from "@solana-blik/sdk/react";
+
+// Customer: generate code & approve payment
+const { code, status, linkedPayment, generate } = usePaymentCode({ apiBaseUrl: "/api" });
+const { pay, status: payStatus } = useBlikPay();
+
+// Merchant: create payment & watch for confirmation
+const { createPayment, linkCode, status } = useMerchantPayment({ apiBaseUrl: "/api", connection });
+```
+
+### `@solana-blik/server` — backend handlers
+
+Framework-agnostic payment handlers + storage adapters. One catch-all route replaces 7 API endpoints.
+
+```bash
+# From this monorepo (file: dependency)
+npm install @solana-blik/sdk@file:./packages/sdk @solana-blik/server@file:./packages/server @solana/web3.js
+```
+
+**Next.js integration (~10 lines):**
+
+```typescript
+// app/api/[...path]/route.ts
+import { createBlikRoutes } from "@solana-blik/server/nextjs";
+import { createUpstashStore } from "@solana-blik/server";
+import { Connection, clusterApiUrl } from "@solana/web3.js";
+
+const store = createUpstashStore({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+export const { GET, POST } = createBlikRoutes({ store, connection });
+```
+
+For development without Redis, use `createMemoryStore()` — works identically with TTL-based expiration.
+
+Rate limiting is enabled by default. Disable with `rateLimit: false`:
+
+```typescript
+export const { GET, POST } = createBlikRoutes({ store, connection, rateLimit: false });
+```
+
+## Security
+
+### Rate limiting
+
+All API endpoints are rate-limited per IP using a fixed-window counter stored in the same Redis instance. The `/codes/resolve` endpoint has an additional burst limiter (100 req/10s) to prevent brute-force enumeration of active 6-digit codes.
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| `POST /codes/generate` | 5 | 60s |
+| `GET /codes/{code}/resolve` | 30 + 100 burst | 60s / 10s |
+| `POST /payments/create` | 10 | 60s |
+| `POST /payments/link` | 10 | 60s |
+| `GET /payments/{id}/status` | 30 | 60s |
+| `POST /pay` | 5 | 60s |
+
+### Atomic code linking
+
+Payment linking uses a Redis Lua script (compare-and-set) to prevent race conditions. If two merchants enter the same code simultaneously, exactly one succeeds and the other receives a `409 Conflict`. No TOCTOU window.
+
+### Security headers
+
+All responses include: `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and `Permissions-Policy`.
+
+### Cryptographic code generation
+
+Payment codes use `crypto.getRandomValues()` instead of `Math.random()` for unpredictable generation.
+
 ## Stack
 
 | Layer | Tech |
 |-------|------|
 | Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4 |
-| Blockchain | Solana (`@solana/web3.js` v1, `@solana/pay` v0.2.6) |
+| Smart contract | Anchor 0.32, Rust |
+| Blockchain | Solana devnet (`@solana/web3.js` v1) |
 | Wallet | `@solana/wallet-adapter-react` (Phantom, Solflare auto-detected) |
 | State / codes | Upstash Redis (serverless, 120s TTL on codes, 300s on payments) |
 | Price feed | CoinGecko API (SOL/PLN, SOL/USD, SOL/EUR, 60s cache) |
-| Deploy | Vercel |
+| Deploy | Vercel (frontend), Solana devnet (program) |
 
 ## API endpoints
+
+All served by a single catch-all route (`api/[...path]/route.ts`) via `@solana-blik/server`:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/payments/create` | POST | Merchant creates payment (amount + wallet) |
 | `/api/codes/generate` | POST | Customer generates 6-digit code |
-| `/api/payments/link` | POST | Merchant links code to payment |
-| `/api/payments/[id]/status` | GET | Poll payment status |
-| `/api/codes/[code]/resolve` | GET | Customer polls if code was linked |
-| `/api/pay` | GET/POST | Solana Pay Transaction Request endpoint |
+| `/api/payments/link` | POST | Merchant links code to payment, derives receipt PDA |
+| `/api/payments/{id}/status` | GET | Payment status (with lazy on-chain check) |
+| `/api/codes/{code}/resolve` | GET | Customer polls if code was linked |
+| `/api/pay` | GET/POST | Builds Anchor `pay` TX, returns serialized + receiptPda |
 | `/api/price` | GET | Current SOL prices in PLN/USD/EUR |
-
-## Payment confirmation
-
-Uses Solana Pay's `reference` mechanism - a random PublicKey is attached to each transaction as a non-signer account key. Backend polls `findReference()` to detect when the transaction lands on-chain, then marks payment as confirmed.
 
 ## Local development
 
@@ -67,34 +211,48 @@ Works without Redis (falls back to in-memory store with TTL). For production, se
 ```
 UPSTASH_REDIS_REST_URL=https://...
 UPSTASH_REDIS_REST_TOKEN=...
+NEXT_PUBLIC_PROGRAM_ID=AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv
 ```
 
-Currently on **devnet** - switch Phantom to devnet in Settings > Developer Settings. Get devnet SOL from https://faucet.solana.com
+### Building the Anchor program
+
+```bash
+anchor build
+cargo-build-sbf --manifest-path programs/solanablik/Cargo.toml --sbf-out-dir target/deploy
+solana program deploy target/deploy/solanablik.so --program-id target/deploy/solanablik-keypair.json --url devnet
+```
+
+Currently on **devnet** — switch Phantom to devnet in Settings > Developer Settings. Get devnet SOL from https://faucet.solana.com
 
 ## Project structure
 
 ```
-src/
-├── app/
-│   ├── page.tsx                    # Customer (payer) UI
-│   ├── merchant/page.tsx           # Merchant terminal UI
-│   └── api/
-│       ├── codes/generate/         # Generate 6-digit code
-│       ├── codes/[code]/resolve/   # Poll code status
-│       ├── payments/create/        # Create payment
-│       ├── payments/link/          # Link code to payment
-│       ├── payments/[id]/status/   # Payment status
-│       ├── pay/                    # Solana Pay TX builder
-│       └── price/                  # SOL price feed
-├── lib/
-│   ├── codes.ts                    # Code/payment storage (Redis or in-memory)
-│   ├── payment.ts                  # TX builder + chain polling
-│   ├── price.ts                    # CoinGecko price fetcher
-│   └── solana.ts                   # Connection constants
-└── components/
-    ├── AmountInput.tsx             # Numpad with fiat currency selector
-    ├── CodeDisplay.tsx             # 6-digit code with timer + copy
-    ├── CodeInput.tsx               # OTP-style code input
-    ├── WalletButton.tsx            # Wallet connect button
-    └── WalletProvider.tsx          # Solana wallet adapter providers
+├── programs/solanablik/
+│   └── src/lib.rs                    # Anchor program (pay instruction)
+├── packages/
+│   ├── sdk/                          # @solana-blik/sdk
+│   │   └── src/
+│   │       ├── index.ts              # Core: TX building, PDA, receipt parsing
+│   │       └── react/                # React hooks (usePaymentCode, useBlikPay, etc.)
+│   └── server/                       # @solana-blik/server
+│       └── src/
+│           ├── handlers.ts           # Framework-agnostic payment handlers
+│           ├── storage.ts            # Store interface + Redis/memory adapters + atomic ops
+│           ├── ratelimit.ts          # Per-IP rate limiting (fixed-window counter)
+│           └── adapters/nextjs.ts    # Next.js catch-all route adapter
+├── src/
+│   ├── middleware.ts                  # Security headers (CSP, X-Frame-Options, etc.)
+│   ├── app/
+│   │   ├── page.tsx                  # Customer UI (uses SDK hooks)
+│   │   ├── merchant/page.tsx         # Merchant terminal (uses SDK hooks)
+│   │   └── api/[...path]/route.ts   # Single catch-all (uses server package)
+│   ├── lib/                          # Re-exports from SDK packages
+│   └── components/
+│       ├── AmountInput.tsx           # Numpad with fiat currency selector
+│       ├── CodeDisplay.tsx           # 6-digit code with timer + copy
+│       ├── CodeInput.tsx             # OTP-style code input
+│       ├── WalletButton.tsx          # Wallet connect button
+│       └── WalletProvider.tsx        # Solana wallet adapter providers
+├── Anchor.toml                       # Anchor workspace config
+└── target/deploy/                    # Compiled .so + keypair
 ```
