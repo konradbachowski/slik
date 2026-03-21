@@ -1,343 +1,569 @@
 "use client";
 
-import { useCallback } from "react";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { usePaymentCode, useBlikPay } from "@solana-blik/sdk/react";
-import { WalletButton } from "@/components/WalletButton";
-import { CodeDisplay } from "@/components/CodeDisplay";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { Nav } from "@/components/Nav";
 
-type ViewState =
-  | "disconnected"
-  | "connected"
-  | "generating"
-  | "code_active"
-  | "linked"
-  | "signing"
-  | "confirming"
-  | "paid"
-  | "error";
+// ---------------------------------------------------------------------------
+// Animated code digit
+// ---------------------------------------------------------------------------
 
-export default function Home() {
-  const { publicKey, connected, sendTransaction } = useWallet();
-  const { connection } = useConnection();
+function AnimatedDigit({ delay }: { delay: number }) {
+  const [digit, setDigit] = useState(Math.floor(Math.random() * 10));
 
-  const {
-    code,
-    expiresAt,
-    status: codeStatus,
-    linkedPayment,
-    error: codeError,
-    generate,
-    reset: codeReset,
-  } = usePaymentCode({ apiBaseUrl: "/api" });
-
-  const {
-    status: payStatus,
-    error: payError,
-    pay,
-    reset: payReset,
-  } = useBlikPay();
-
-  // Derive view state from hook statuses
-  function getViewState(): ViewState {
-    if (!connected) return "disconnected";
-    if (payStatus === "paid") return "paid";
-    if (payStatus === "confirming") return "confirming";
-    if (payStatus === "signing" || payStatus === "building") return "signing";
-    if (payStatus === "error") return "error";
-    if (codeError) return "error";
-    if (codeStatus === "linked") return "linked";
-    if (codeStatus === "active") return "code_active";
-    if (codeStatus === "generating") return "generating";
-    return "connected";
-  }
-
-  const state = getViewState();
-  const error = payError || codeError;
-
-  // Generate a payment code
-  const generateCode = useCallback(() => {
-    if (!publicKey) return;
-    generate(publicKey.toBase58());
-  }, [publicKey, generate]);
-
-  // Handle code expiry (CodeDisplay calls this)
-  const handleExpired = useCallback(() => {
-    // No-op: the hook handles polling cleanup internally.
-    // CodeDisplay shows its own expired UI.
-  }, []);
-
-  // Approve and sign the payment transaction
-  const approvePayment = useCallback(() => {
-    if (!linkedPayment || !publicKey || !sendTransaction) return;
-    pay({
-      paymentId: linkedPayment.paymentId,
-      apiBaseUrl: "/api",
-      customerPubkey: publicKey,
-      connection,
-      sendTransaction,
-    });
-  }, [linkedPayment, publicKey, sendTransaction, connection, pay]);
-
-  // Reset to generate a new code
-  const resetToConnected = useCallback(() => {
-    codeReset();
-    payReset();
-  }, [codeReset, payReset]);
-
-  // Truncate wallet address for display
-  const walletAddress = publicKey
-    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
-    : "";
-
-  // Amount to display in paid state (from linkedPayment since hooks hold it)
-  const paidAmount = linkedPayment?.amount ?? null;
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDigit(Math.floor(Math.random() * 10));
+    }, 2000 + delay * 300);
+    return () => clearInterval(interval);
+  }, [delay]);
 
   return (
-    <main className="relative z-10 flex-1 flex items-center justify-center p-4">
-      <div
-        className="glass-card w-full"
-        style={{ maxWidth: 480, padding: 32 }}
+    <span
+      className="inline-flex items-center justify-center"
+      style={{
+        width: "clamp(48px, 8vw, 72px)",
+        height: "clamp(64px, 10vw, 96px)",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-digit)",
+        fontFamily: "var(--font-code)",
+        fontSize: "clamp(28px, 5vw, 44px)",
+        fontWeight: 700,
+        color: "var(--primary)",
+        boxShadow: "0 4px 20px rgba(99, 91, 255, 0.08)",
+        transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        animation: `digit-in 600ms cubic-bezier(0.34, 1.56, 0.64, 1) ${delay * 80}ms both`,
+      }}
+    >
+      {digit}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scroll-triggered section
+// ---------------------------------------------------------------------------
+
+function FadeInSection({
+  children,
+  delay = 0,
+  className = "",
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(28px)",
+        transition: `opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1) ${delay}ms, transform 0.7s cubic-bezier(0.4, 0, 0.2, 1) ${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Landing page
+// ---------------------------------------------------------------------------
+
+export default function LandingPage() {
+  return (
+    <>
+      <Nav />
+
+      {/* Hero */}
+      <section
+        style={{
+          paddingTop: "clamp(120px, 18vh, 180px)",
+          paddingBottom: "clamp(80px, 12vh, 140px)",
+          paddingLeft: 24,
+          paddingRight: 24,
+          textAlign: "center",
+          position: "relative",
+          overflow: "hidden",
+        }}
       >
-        {/* Header */}
-        <div className="flex flex-col items-center gap-1 mb-8">
-          <div className="flex items-center gap-3 mb-1">
-            {/* Logo mark */}
-            <div
-              className="flex items-center justify-center rounded-xl"
+        {/* Subtle gradient orb */}
+        <div
+          style={{
+            position: "absolute",
+            top: "10%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 600,
+            height: 600,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle, rgba(99,91,255,0.06) 0%, rgba(153,69,255,0.03) 40%, transparent 70%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        <div
+          style={{
+            maxWidth: 800,
+            margin: "0 auto",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
+          {/* Badge */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 16px",
+              borderRadius: 100,
+              background: "var(--primary-light)",
+              border: "1px solid rgba(99, 91, 255, 0.12)",
+              marginBottom: 28,
+              animation: "fade-in-up 600ms ease 50ms both",
+            }}
+          >
+            <span
               style={{
-                width: 40,
-                height: 40,
-                background: "var(--primary)",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "var(--solana-green)",
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "var(--font-code)",
+                fontSize: 12,
+                fontWeight: 500,
+                color: "var(--primary)",
+                letterSpacing: "0.04em",
               }}
             >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
+              Built on Solana
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1
+            style={{
+              fontFamily: "var(--font-code)",
+              fontSize: "clamp(36px, 6vw, 64px)",
+              fontWeight: 700,
+              lineHeight: 1.1,
+              color: "var(--text)",
+              margin: "0 0 20px",
+              letterSpacing: "-0.02em",
+              animation: "fade-in-up 600ms ease 100ms both",
+            }}
+          >
+            Pay with a 6-digit code.
+            <br />
+            <span
+              style={{
+                backgroundImage: "var(--solana-gradient)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              On Solana.
+            </span>
+          </h1>
+
+          {/* Subtitle */}
+          <p
+            style={{
+              fontSize: "clamp(16px, 2.5vw, 20px)",
+              lineHeight: 1.6,
+              color: "var(--text-secondary)",
+              maxWidth: 560,
+              margin: "0 auto 40px",
+              animation: "fade-in-up 600ms ease 200ms both",
+            }}
+          >
+            Instant payments on Solana. No QR codes. No card
+            numbers. Just tell the merchant your code.
+          </p>
+
+          {/* Animated code display */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: "clamp(8px, 1.5vw, 14px)",
+              marginBottom: 48,
+              animation: "fade-in-up 600ms ease 300ms both",
+            }}
+          >
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <AnimatedDigit key={i} delay={i} />
+            ))}
+          </div>
+
+          {/* CTAs */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 16,
+              flexWrap: "wrap",
+              animation: "fade-in-up 600ms ease 400ms both",
+            }}
+          >
+            <Link
+              href="/pay"
+              className="gradient-btn"
+              style={{
+                textDecoration: "none",
+                fontSize: 15,
+                padding: "14px 32px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              Pay with SLIK
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path
-                  d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                  stroke="#ffffff"
+                  d="M5 12h14M12 5l7 7-7 7"
+                  stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               </svg>
-            </div>
-            <h1
-              className="text-xl font-bold tracking-tight"
-              style={{ color: "var(--text)" }}
-            >
-              SolanaBLIK
-            </h1>
-          </div>
-          <p
-            className="text-xs tracking-widest uppercase"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Instant crypto payments
-          </p>
-        </div>
-
-        {/* Divider */}
-        <div
-          className="w-full h-px mb-8"
-          style={{
-            background: "var(--border)",
-          }}
-        />
-
-        {/* -- STATE: Disconnected -- */}
-        {state === "disconnected" && (
-          <div
-            className="flex flex-col items-center gap-6"
-            style={{ animation: "fade-in-up 500ms ease both" }}
-          >
-            <div className="flex flex-col items-center gap-3 mb-2">
-              {/* Shield icon */}
-              <div
-                className="flex items-center justify-center rounded-full"
-                style={{
-                  width: 64,
-                  height: 64,
-                  background: "var(--green-light)",
-                  border: "1px solid rgba(48, 181, 102, 0.15)",
-                }}
-              >
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-                    stroke="var(--green)"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M9 12l2 2 4-4"
-                    stroke="var(--green)"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-
-              <p
-                className="text-sm text-center leading-relaxed"
-                style={{ color: "var(--text-secondary)", maxWidth: 280 }}
-              >
-                Connect your Solana wallet to generate payment codes and pay in SOL at any merchant.
-              </p>
-            </div>
-
-            <WalletButton />
-          </div>
-        )}
-
-        {/* -- STATE: Connected (ready to generate) -- */}
-        {state === "connected" && (
-          <div
-            className="flex flex-col items-center gap-6"
-            style={{ animation: "fade-in-up 400ms ease both" }}
-          >
-            {/* Wallet info */}
-            <div
-              className="flex items-center gap-3 px-4 py-3 rounded-xl w-full"
+            </Link>
+            <Link
+              href="/merchant"
               style={{
-                background: "var(--bg-base)",
+                textDecoration: "none",
+                fontSize: 15,
+                fontWeight: 600,
+                padding: "14px 32px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                borderRadius: "var(--radius-btn)",
                 border: "1px solid var(--border)",
+                color: "var(--text)",
+                background: "var(--bg-card)",
+                transition: "all var(--transition)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--solana-green)";
+                e.currentTarget.style.boxShadow =
+                  "0 4px 20px rgba(20, 241, 149, 0.12)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border)";
+                e.currentTarget.style.boxShadow = "none";
               }}
             >
+              Receive payments
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M5 12h14M12 5l7 7-7 7"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section
+        style={{
+          padding: "80px 24px",
+          maxWidth: 1100,
+          margin: "0 auto",
+        }}
+      >
+        <FadeInSection>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <h2
+              style={{
+                fontFamily: "var(--font-code)",
+                fontSize: "clamp(24px, 4vw, 36px)",
+                fontWeight: 700,
+                color: "var(--text)",
+                margin: "0 0 12px",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              How it works
+            </h2>
+            <p
+              style={{
+                fontSize: 16,
+                color: "var(--text-secondary)",
+                maxWidth: 480,
+                margin: "0 auto",
+              }}
+            >
+              The merchant sets the amount, the customer speaks a
+              code, the payment is done. Simple as that.
+            </p>
+          </div>
+        </FadeInSection>
+
+        {/* Timeline steps */}
+        <div style={{ maxWidth: 700, margin: "0 auto" }}>
+          {[
+            {
+              step: "01",
+              title: "Merchant enters the amount",
+              desc: "Opens the SLIK terminal, types 42 PLN. The system converts to SOL at a live rate and creates a payment request.",
+              color: "var(--solana-green)",
+            },
+            {
+              step: "02",
+              title: "Customer generates a code",
+              desc: "Opens the SLIK app, taps 'Generate code'. Gets a random 6-digit number - valid for 120 seconds. Tells it to the merchant verbally.",
+              color: "var(--primary)",
+            },
+            {
+              step: "03",
+              title: "Merchant enters the code",
+              desc: "Types the 6 digits into the terminal. The system matches the code to the payment and asks the customer for approval.",
+              color: "var(--solana-green)",
+            },
+            {
+              step: "04",
+              title: "Customer approves. Done.",
+              desc: "One tap in the wallet. SOL is transferred atomically with an on-chain receipt. Both sides see confirmation in ~400ms.",
+              color: "var(--primary)",
+            },
+          ].map((item, i) => (
+            <FadeInSection key={item.step} delay={i * 100}>
               <div
-                className="flex items-center justify-center rounded-lg"
                 style={{
-                  width: 36,
-                  height: 36,
-                  background: "var(--primary-light)",
+                  display: "flex",
+                  gap: 24,
+                  padding: "28px 0",
+                  borderBottom: i < 3 ? "1px solid var(--border)" : "none",
+                  alignItems: "flex-start",
                 }}
               >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M21 12V7H5a2 2 0 010-4h14v4"
-                    stroke="var(--primary)"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M3 5v14a2 2 0 002 2h16v-5"
-                    stroke="var(--primary)"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M18 12a1 1 0 100 4h4v-4h-4z"
-                    stroke="var(--primary)"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <div className="flex flex-col">
-                <span
-                  className="text-xs uppercase tracking-wider"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Wallet connected
-                </span>
-                <span
-                  className="text-sm font-mono font-medium"
+                <div
                   style={{
-                    color: "var(--text)",
                     fontFamily: "var(--font-code)",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: item.color,
+                    letterSpacing: "0.05em",
+                    flexShrink: 0,
+                    paddingTop: 2,
+                    width: 32,
                   }}
                 >
-                  {walletAddress}
+                  {item.step}
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 600,
+                      color: "var(--text)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {item.title}
+                  </div>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      lineHeight: 1.7,
+                      color: "var(--text-secondary)",
+                      margin: 0,
+                    }}
+                  >
+                    {item.desc}
+                  </p>
+                </div>
+              </div>
+            </FadeInSection>
+          ))}
+        </div>
+      </section>
+
+      {/* SDK section */}
+      <section
+        style={{
+          padding: "80px 24px",
+          background: "var(--bg-card)",
+          borderTop: "1px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <div style={{ maxWidth: 800, margin: "0 auto" }}>
+          <FadeInSection>
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <div
+                style={{
+                  fontFamily: "var(--font-code)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--primary)",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  marginBottom: 12,
+                }}
+              >
+                For developers
+              </div>
+              <h2
+                style={{
+                  fontFamily: "var(--font-code)",
+                  fontSize: "clamp(24px, 4vw, 36px)",
+                  fontWeight: 700,
+                  color: "var(--text)",
+                  margin: "0 0 12px",
+                }}
+              >
+                Build with SLIK
+              </h2>
+              <p
+                style={{
+                  fontSize: 16,
+                  color: "var(--text-secondary)",
+                  maxWidth: 520,
+                  margin: "0 auto",
+                }}
+              >
+                Two npm packages. React hooks for customer and merchant
+                flows. One catch-all API route for the backend. Ship
+                payments in minutes.
+              </p>
+            </div>
+          </FadeInSection>
+
+          <FadeInSection delay={150}>
+            {/* Code block */}
+            <div
+              style={{
+                background: "#1a1a2e",
+                borderRadius: "var(--radius-card)",
+                padding: "28px 32px",
+                fontFamily: "var(--font-code)",
+                fontSize: 14,
+                lineHeight: 1.8,
+                overflow: "auto",
+              }}
+            >
+              <div style={{ color: "#a3acb9" }}>
+                {"// Install"}
+              </div>
+              <div style={{ color: "#14F195" }}>
+                npm install @slik-pay/sdk @slik-pay/server
+              </div>
+              <br />
+              <div style={{ color: "#a3acb9" }}>
+                {"// React - customer side"}
+              </div>
+              <div>
+                <span style={{ color: "#c792ea" }}>import</span>
+                <span style={{ color: "#e0e0e0" }}> {"{ "}</span>
+                <span style={{ color: "#82aaff" }}>usePaymentCode</span>
+                <span style={{ color: "#e0e0e0" }}>{", "}</span>
+                <span style={{ color: "#82aaff" }}>useSlikPay</span>
+                <span style={{ color: "#e0e0e0" }}>{" }"}</span>
+                <span style={{ color: "#c792ea" }}> from</span>
+                <span style={{ color: "#c3e88d" }}>
+                  {" '@slik-pay/sdk/react'"}
                 </span>
               </div>
-              <div className="ml-auto">
-                <span className="status-dot active" />
+              <br />
+              <div style={{ color: "#a3acb9" }}>
+                {"// Backend - one line"}
+              </div>
+              <div>
+                <span style={{ color: "#c792ea" }}>export const</span>
+                <span style={{ color: "#e0e0e0" }}>{" { GET, POST } = "}</span>
+                <span style={{ color: "#82aaff" }}>createSlikRoutes</span>
+                <span style={{ color: "#e0e0e0" }}>
+                  {"({ store, connection })"}
+                </span>
               </div>
             </div>
+          </FadeInSection>
 
-            {/* Generate button */}
-            <button
-              onClick={generateCode}
-              className="gradient-btn w-full text-center"
-              style={{ fontSize: 16, padding: "16px 28px" }}
-            >
-              Generate payment code
-            </button>
-
-            {/* Manage wallet */}
-            <div className="w-full flex justify-center">
-              <WalletButton />
-            </div>
-          </div>
-        )}
-
-        {/* -- STATE: Generating -- */}
-        {state === "generating" && (
-          <div
-            className="flex flex-col items-center gap-6 py-8"
-            style={{ animation: "fade-in-up 300ms ease both" }}
-          >
-            {/* Spinner */}
+          <FadeInSection delay={300}>
             <div
-              className="rounded-full"
               style={{
-                width: 48,
-                height: 48,
-                border: "3px solid var(--border)",
-                borderTopColor: "var(--primary)",
-                animation: "spin 800ms linear infinite",
+                display: "flex",
+                justifyContent: "center",
+                gap: 16,
+                marginTop: 32,
+                flexWrap: "wrap",
               }}
-            />
-            <p
-              className="text-sm"
-              style={{ color: "var(--text-secondary)" }}
             >
-              Generating your payment code...
-            </p>
-
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
-
-        {/* -- STATE: Code active (waiting for merchant) -- */}
-        {state === "code_active" && code && (
-          <div style={{ animation: "fade-in-up 400ms ease both" }}>
-            <CodeDisplay
-              code={code}
-              expiresAt={expiresAt}
-              onExpired={handleExpired}
-            />
-
-            <div className="mt-8 flex flex-col items-center gap-3">
-              <button
-                onClick={resetToConnected}
-                className="text-sm font-medium px-4 py-2 rounded-lg transition-all"
+              <a
+                href="https://github.com/konradbachowski/slik"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="gradient-btn"
                 style={{
-                  color: "var(--text-secondary)",
-                  background: "transparent",
+                  textDecoration: "none",
+                  fontSize: 14,
+                  padding: "12px 28px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                View on GitHub
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </a>
+              <Link
+                href="/vendors"
+                style={{
+                  textDecoration: "none",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  padding: "12px 28px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  borderRadius: "var(--radius-btn)",
                   border: "1px solid var(--border)",
+                  color: "var(--text-secondary)",
+                  transition: "all 0.2s ease",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = "var(--primary)";
@@ -348,386 +574,120 @@ export default function Home() {
                   e.currentTarget.style.color = "var(--text-secondary)";
                 }}
               >
-                Cancel & generate new code
-              </button>
+                For vendors
+              </Link>
             </div>
-          </div>
-        )}
+          </FadeInSection>
+        </div>
+      </section>
 
-        {/* -- STATE: Linked (merchant entered code, show amount) -- */}
-        {state === "linked" && linkedPayment && (
+      {/* Stats / trust bar */}
+      <section style={{ padding: "60px 24px" }}>
+        <FadeInSection>
           <div
-            className="flex flex-col items-center gap-6"
-            style={{ animation: "fade-in-up 400ms ease both" }}
+            style={{
+              maxWidth: 900,
+              margin: "0 auto",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 32,
+              textAlign: "center",
+            }}
           >
-            <div className="flex items-center gap-3">
-              <span className="status-dot linked" />
-              <span
-                className="text-sm font-medium tracking-wide uppercase"
-                style={{ color: "var(--primary)" }}
-              >
-                Payment request received
-              </span>
-            </div>
-
-            {/* Amount display */}
-            <div
-              className="flex flex-col items-center gap-2 p-6 rounded-2xl w-full"
-              style={{
-                background: "var(--primary-light)",
-                border: "1px solid rgba(99, 91, 255, 0.15)",
-              }}
-            >
-              <span
-                className="text-xs uppercase tracking-wider"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Amount to pay
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span
-                  className="font-bold"
+            {[
+              { value: "~400ms", label: "Confirmation time" },
+              { value: "0.2%", label: "Protocol fee" },
+              { value: "6 digits", label: "One code, one payment" },
+              { value: "$0", label: "No monthly fees" },
+            ].map((stat) => (
+              <div key={stat.label}>
+                <div
                   style={{
-                    fontSize: 48,
                     fontFamily: "var(--font-code)",
+                    fontSize: 28,
+                    fontWeight: 700,
                     color: "var(--text)",
-                    lineHeight: 1,
+                    marginBottom: 4,
                   }}
                 >
-                  {linkedPayment.amount.toFixed(2)}
-                </span>
-                <span
-                  className="text-lg font-semibold"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  SOL
-                </span>
-              </div>
-              {code && (
-                <span
-                  className="text-xs font-mono mt-1"
+                  {stat.value}
+                </div>
+                <div
                   style={{
+                    fontSize: 13,
                     color: "var(--text-muted)",
                     fontFamily: "var(--font-code)",
                   }}
                 >
-                  Code: {code}
-                </span>
-              )}
-            </div>
-
-            {error && (
-              <div
-                className="flex items-center gap-2 px-4 py-3 rounded-xl w-full"
-                style={{
-                  background: "var(--error-light)",
-                  border: "1px solid rgba(223, 27, 65, 0.15)",
-                }}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <circle cx="12" cy="12" r="10" stroke="var(--error)" strokeWidth="1.5" />
-                  <path d="M12 8v4M12 16h.01" stroke="var(--error)" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-                <span className="text-xs" style={{ color: "var(--error)" }}>
-                  {error}
-                </span>
+                  {stat.label}
+                </div>
               </div>
-            )}
-
-            <button
-              onClick={approvePayment}
-              className="gradient-btn w-full text-center"
-              style={{ fontSize: 16, padding: "16px 28px" }}
-            >
-              Approve payment
-            </button>
-
-            <button
-              onClick={resetToConnected}
-              className="text-xs"
-              style={{
-                color: "var(--text-muted)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 4,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "var(--text-secondary)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "var(--text-muted)";
-              }}
-            >
-              Decline
-            </button>
+            ))}
           </div>
-        )}
+        </FadeInSection>
+      </section>
 
-        {/* -- STATE: Signing -- */}
-        {state === "signing" && (
-          <div
-            className="flex flex-col items-center gap-6 py-8"
-            style={{ animation: "fade-in-up 300ms ease both" }}
-          >
-            <div
-              className="rounded-full"
-              style={{
-                width: 48,
-                height: 48,
-                border: "3px solid var(--border)",
-                borderTopColor: "var(--primary)",
-                animation: "spin 800ms linear infinite",
-              }}
-            />
-            <div className="flex flex-col items-center gap-1">
-              <p
-                className="text-sm font-medium"
-                style={{ color: "var(--text)" }}
-              >
-                Confirm in your wallet
-              </p>
-              <p
-                className="text-xs"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Approve the transaction in your wallet extension
-              </p>
-            </div>
-
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
-
-        {/* -- STATE: Confirming -- */}
-        {state === "confirming" && (
-          <div
-            className="flex flex-col items-center gap-6 py-8"
-            style={{ animation: "fade-in-up 300ms ease both" }}
-          >
-            <div
-              className="rounded-full"
-              style={{
-                width: 48,
-                height: 48,
-                border: "3px solid var(--border)",
-                borderTopColor: "var(--green)",
-                animation: "spin 800ms linear infinite",
-              }}
-            />
-            <div className="flex flex-col items-center gap-1">
-              <p
-                className="text-sm font-medium"
-                style={{ color: "var(--text)" }}
-              >
-                Confirming on Solana
-              </p>
-              <p
-                className="text-xs"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Waiting for network confirmation...
-              </p>
-            </div>
-
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
-
-        {/* -- STATE: Paid -- */}
-        {state === "paid" && (
-          <div
-            className="flex flex-col items-center gap-6"
-            style={{ animation: "fade-in-up 400ms ease both" }}
-          >
-            {/* Success animation */}
-            <div className="relative flex items-center justify-center">
-              {/* Particles */}
-              <SuccessParticles />
-
-              {/* Ring */}
-              <div
-                className="flex items-center justify-center rounded-full"
-                style={{
-                  width: 80,
-                  height: 80,
-                  border: "3px solid var(--success)",
-                  animation: "check-ring 600ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
-                }}
-              >
-                {/* Checkmark */}
-                <svg
-                  width="36"
-                  height="36"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  style={{
-                    animation: "check-scale 500ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both",
-                  }}
-                >
-                  <path
-                    d="M5 13l4 4L19 7"
-                    stroke="var(--success)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-center gap-1">
-              <h2
-                className="text-lg font-bold"
-                style={{ color: "var(--success)" }}
-              >
-                Payment successful
-              </h2>
-              {paidAmount !== null && (
-                <p
-                  className="text-2xl font-bold font-mono"
-                  style={{
-                    color: "var(--text)",
-                    fontFamily: "var(--font-code)",
-                  }}
-                >
-                  {paidAmount.toFixed(2)} SOL
-                </p>
-              )}
-              <p
-                className="text-xs mt-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Transaction confirmed on Solana
-              </p>
-            </div>
-
-            <button
-              onClick={resetToConnected}
-              className="gradient-btn w-full text-center"
-              style={{ fontSize: 15, padding: "14px 24px" }}
-            >
-              Done
-            </button>
-          </div>
-        )}
-
-        {/* -- STATE: Error -- */}
-        {state === "error" && (
-          <div
-            className="flex flex-col items-center gap-6"
-            style={{ animation: "fade-in-up 400ms ease both" }}
-          >
-            <div
-              className="flex items-center justify-center rounded-full"
-              style={{
-                width: 64,
-                height: 64,
-                background: "var(--error-light)",
-                border: "1px solid rgba(223, 27, 65, 0.15)",
-              }}
-            >
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <circle cx="12" cy="12" r="10" stroke="var(--error)" strokeWidth="1.5" />
-                <path d="M15 9l-6 6M9 9l6 6" stroke="var(--error)" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-
-            <div className="flex flex-col items-center gap-1">
-              <h2
-                className="text-base font-semibold"
-                style={{ color: "var(--error)" }}
-              >
-                Something went wrong
-              </h2>
-              {error && (
-                <p
-                  className="text-xs text-center"
-                  style={{ color: "var(--text-secondary)", maxWidth: 300 }}
-                >
-                  {error}
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={resetToConnected}
-              className="gradient-btn w-full text-center"
-              style={{ fontSize: 15, padding: "14px 24px" }}
-            >
-              Try again
-            </button>
-          </div>
-        )}
-      </div>
-    </main>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Success particles (CSS-only confetti effect)                       */
-/* ------------------------------------------------------------------ */
-
-function SuccessParticles() {
-  const particles = [
-    { x: -40, y: -35, rotate: 15, color: "var(--primary)", delay: 0, size: 6 },
-    { x: 35, y: -40, rotate: -25, color: "var(--green)", delay: 50, size: 5 },
-    { x: -30, y: 30, rotate: 45, color: "var(--success)", delay: 100, size: 7 },
-    { x: 40, y: 25, rotate: -15, color: "var(--primary)", delay: 150, size: 5 },
-    { x: -15, y: -45, rotate: 60, color: "var(--warning)", delay: 80, size: 4 },
-    { x: 20, y: 40, rotate: -40, color: "var(--green)", delay: 120, size: 6 },
-    { x: -45, y: 0, rotate: 30, color: "var(--success)", delay: 60, size: 5 },
-    { x: 45, y: -10, rotate: -55, color: "var(--primary)", delay: 140, size: 4 },
-  ];
-
-  return (
-    <>
-      {particles.map((p, i) => (
+      {/* Footer */}
+      <footer
+        style={{
+          borderTop: "1px solid var(--border)",
+          padding: "40px 24px",
+          background: "var(--bg-card)",
+        }}
+      >
         <div
-          key={i}
           style={{
-            position: "absolute",
-            width: p.size,
-            height: p.size,
-            borderRadius: p.size > 5 ? "2px" : "50%",
-            background: p.color,
-            animation: `particle-burst 700ms cubic-bezier(0.25, 0.46, 0.45, 0.94) ${p.delay}ms both`,
-            transform: `translate(${p.x}px, ${p.y}px) rotate(${p.rotate}deg)`,
+            maxWidth: 1100,
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 24,
           }}
-        />
-      ))}
-      <style>{`
-        @keyframes particle-burst {
-          0% {
-            transform: translate(0, 0) scale(0);
-            opacity: 1;
-          }
-          100% {
-            transform: var(--particle-end, translate(40px, -40px)) scale(1);
-            opacity: 0;
-          }
-        }
-      `}</style>
-      {particles.map((p, i) => (
-        <style key={`style-${i}`}>{`
-          div:nth-child(${i + 1}) {
-            --particle-end: translate(${p.x}px, ${p.y}px) rotate(${p.rotate}deg);
-          }
-        `}</style>
-      ))}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <img src="/logo/logo.svg" alt="SLIK" style={{ height: 28, opacity: 0.5 }} />
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Instant 6-code payments on Solana.
+            </span>
+          </div>
+
+          <div style={{ display: "flex", gap: 24 }}>
+            {[
+              { label: "Pay", href: "/pay" },
+              { label: "Merchant", href: "/merchant" },
+              { label: "Vendors", href: "/vendors" },
+              { label: "Press", href: "/press" },
+              { label: "Team", href: "/team" },
+              {
+                label: "GitHub",
+                href: "https://github.com/konradbachowski/slik",
+              },
+            ].map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                style={{
+                  fontFamily: "var(--font-code)",
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  textDecoration: "none",
+                  transition: "color 0.2s",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.color = "var(--text)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.color = "var(--text-muted)")
+                }
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </footer>
     </>
   );
 }

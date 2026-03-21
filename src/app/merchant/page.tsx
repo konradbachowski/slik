@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { useMerchantPayment } from "@solana-blik/sdk/react";
+import { useMerchantPayment } from "@slik-pay/sdk/react";
 import AmountInput from "@/components/AmountInput";
 import CodeInput from "@/components/CodeInput";
 import { WalletButton } from "@/components/WalletButton";
+import { Nav } from "@/components/Nav";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,10 +55,10 @@ export default function MerchantTerminal() {
   // Handlers
   // ----------------------------------
   const handleAmountSubmit = useCallback(
-    (amt: number, label?: string) => {
+    (amt: number, label?: string, currency?: "SOL" | "USDC") => {
       if (!publicKey) return;
       setFiatLabel(label);
-      createPayment(amt, publicKey.toBase58());
+      createPayment(amt, publicKey.toBase58(), currency);
     },
     [publicKey, createPayment]
   );
@@ -91,9 +92,11 @@ export default function MerchantTerminal() {
   const isError = status === "error" || status === "expired";
 
   return (
+    <>
+    <Nav />
     <div
       className="relative z-10 flex flex-col min-h-dvh w-full items-center"
-      style={{ backgroundColor: "var(--bg-base)" }}
+      style={{ backgroundColor: "var(--bg-base)", paddingTop: 68 }}
     >
       {/* Header bar */}
       <header
@@ -102,38 +105,7 @@ export default function MerchantTerminal() {
       >
         <div className="flex items-center gap-2.5">
           {/* Logo */}
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--primary), #8b85ff)",
-            }}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <path
-                d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                stroke="#ffffff"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-          <span
-            className="text-sm font-semibold tracking-widest uppercase"
-            style={{
-              fontFamily: "var(--font-code)",
-              color: "var(--text-secondary)",
-              letterSpacing: "0.12em",
-            }}
-          >
-            SolanaBLIK
-          </span>
+          <img src="/logo/logo.svg" alt="SLIK" style={{ height: 44 }} />
         </div>
 
         {/* Status pill */}
@@ -287,6 +259,7 @@ export default function MerchantTerminal() {
         </p>
       </footer>
     </div>
+    </>
   );
 }
 

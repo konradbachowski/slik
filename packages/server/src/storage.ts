@@ -249,12 +249,14 @@ export async function linkCodeToPayment(
 export async function createPayment(
   store: Store,
   amount: number,
-  merchantWallet: string
+  merchantWallet: string,
+  currency: "SOL" | "USDC" = "SOL"
 ): Promise<string> {
   const paymentId = crypto.randomUUID();
 
   const data: PaymentData = {
     amount,
+    currency,
     merchantWallet,
     status: "awaiting_code",
     createdAt: Date.now(),

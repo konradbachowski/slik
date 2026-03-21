@@ -9,7 +9,7 @@ export {
   parseReceipt,
   uuidToBytes,
   bytesToUuid,
-} from "@solana-blik/sdk";
+} from "@slik-pay/sdk";
 
 // Backwards-compatible alias
-export { createPayTransaction as createAnchorPaymentTransaction } from "@solana-blik/sdk";
+export { createPayTransaction as createAnchorPaymentTransaction } from "@slik-pay/sdk";

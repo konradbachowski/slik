@@ -31,6 +31,11 @@
   --error-light: rgba(223, 27, 65, 0.06);
   --warning: #e5960a;
 
+  /* Solana brand colors */
+  --solana-purple: #9945FF;
+  --solana-green: #14F195;
+  --solana-gradient: linear-gradient(135deg, #9945FF, #14F195);
+
   --radius-card: 16px;
   --radius-btn: 12px;
   --radius-digit: 12px;

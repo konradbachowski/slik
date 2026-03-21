@@ -3,15 +3,16 @@
 import { useState, useCallback, useEffect } from "react";
 
 type FiatCurrency = "PLN" | "USD" | "EUR";
+type PayCurrency = "SOL" | "USDC";
 
-const CURRENCIES: { code: FiatCurrency; symbol: string }[] = [
+const FIAT_CURRENCIES: { code: FiatCurrency; symbol: string }[] = [
   { code: "PLN", symbol: "zl" },
   { code: "USD", symbol: "$" },
   { code: "EUR", symbol: "E" },
 ];
 
 interface AmountInputProps {
-  onSubmit: (solAmount: number, fiatLabel?: string) => void;
+  onSubmit: (amount: number, fiatLabel?: string, currency?: PayCurrency) => void;
 }
 
 const NUMPAD_KEYS = [
@@ -24,7 +25,8 @@ const NUMPAD_KEYS = [
 export default function AmountInput({ onSubmit }: AmountInputProps) {
   const [value, setValue] = useState("0");
   const [pressing, setPressing] = useState<string | null>(null);
-  const [currency, setCurrency] = useState<FiatCurrency>("PLN");
+  const [payCurrency, setPayCurrency] = useState<PayCurrency>("SOL");
+  const [fiatCurrency, setFiatCurrency] = useState<FiatCurrency>("PLN");
   const [prices, setPrices] = useState<Record<FiatCurrency, number> | null>(null);
   const [priceLoading, setPriceLoading] = useState(true);
 
@@ -82,18 +84,26 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
     });
   }, []);
 
-  const fiatAmount = parseFloat(value);
-  const isValid = !isNaN(fiatAmount) && fiatAmount > 0 && prices !== null;
+  const numericValue = parseFloat(value);
+  const isUsdc = payCurrency === "USDC";
+
+  // For USDC: amount is directly in USD (no conversion needed)
+  // For SOL: amount is fiat, needs conversion
+  const isValid = !isNaN(numericValue) && numericValue > 0 && (isUsdc || prices !== null);
 
   const solAmount =
-    isValid && prices ? fiatAmount / prices[currency] : 0;
+    !isUsdc && isValid && prices ? numericValue / prices[fiatCurrency] : 0;
 
   const handleSubmit = useCallback(() => {
-    if (isValid && solAmount > 0) {
-      const label = `${parseFloat(value).toFixed(2)} ${currency}`;
-      onSubmit(solAmount, label);
+    if (!isValid) return;
+    if (isUsdc) {
+      // USDC: amount is directly in USDC
+      onSubmit(numericValue, `${numericValue.toFixed(2)} USDC`, "USDC");
+    } else if (solAmount > 0) {
+      const label = `${parseFloat(value).toFixed(2)} ${fiatCurrency}`;
+      onSubmit(solAmount, label, "SOL");
     }
-  }, [isValid, solAmount, onSubmit, value, currency]);
+  }, [isValid, isUsdc, numericValue, solAmount, onSubmit, value, fiatCurrency]);
 
   // Format display
   const displayValue = value.endsWith(".") ? value + "00" : value;
@@ -103,31 +113,62 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
       className="flex flex-col items-center w-full"
       style={{ animation: "fade-in-up 0.4s ease-out both" }}
     >
-      {/* Currency selector */}
-      <div className="flex gap-2 mb-4">
-        {CURRENCIES.map((c) => (
+      {/* SOL / USDC toggle */}
+      <div className="flex gap-2 mb-3">
+        {(["SOL", "USDC"] as PayCurrency[]).map((c) => (
           <button
-            key={c.code}
+            key={c}
             type="button"
-            onClick={() => setCurrency(c.code)}
-            className="px-4 py-2 text-sm font-medium cursor-pointer select-none"
+            onClick={() => { setPayCurrency(c); setValue("0"); }}
+            className="px-5 py-2 text-sm font-bold cursor-pointer select-none"
             style={{
               fontFamily: "var(--font-code)",
               borderRadius: "var(--radius-btn)",
               backgroundColor:
-                currency === c.code ? "var(--primary)" : "var(--bg-card)",
-              color: currency === c.code ? "#ffffff" : "var(--text-secondary)",
+                payCurrency === c
+                  ? c === "USDC" ? "#2775ca" : "var(--primary)"
+                  : "var(--bg-card)",
+              color: payCurrency === c ? "#ffffff" : "var(--text-secondary)",
               border:
-                currency === c.code
-                  ? "1px solid var(--primary)"
+                payCurrency === c
+                  ? "1px solid transparent"
                   : "1px solid var(--border)",
               transition: "all 0.15s ease",
+              letterSpacing: "0.04em",
             }}
           >
-            {c.code}
+            {c}
           </button>
         ))}
       </div>
+
+      {/* Fiat currency selector (only for SOL mode) */}
+      {!isUsdc && (
+        <div className="flex gap-2 mb-4">
+          {FIAT_CURRENCIES.map((c) => (
+            <button
+              key={c.code}
+              type="button"
+              onClick={() => setFiatCurrency(c.code)}
+              className="px-4 py-2 text-sm font-medium cursor-pointer select-none"
+              style={{
+                fontFamily: "var(--font-code)",
+                borderRadius: "var(--radius-btn)",
+                backgroundColor:
+                  fiatCurrency === c.code ? "var(--primary)" : "var(--bg-card)",
+                color: fiatCurrency === c.code ? "#ffffff" : "var(--text-secondary)",
+                border:
+                  fiatCurrency === c.code
+                    ? "1px solid var(--primary)"
+                    : "1px solid var(--border)",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {c.code}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Amount display */}
       <div
@@ -153,11 +194,11 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
             className="text-lg font-semibold tracking-wider uppercase"
             style={{
               fontFamily: "var(--font-code)",
-              color: "var(--primary)",
+              color: isUsdc ? "#2775ca" : "var(--primary)",
               opacity: 0.65,
             }}
           >
-            {currency}
+            {isUsdc ? "USDC" : fiatCurrency}
           </span>
         </div>
 
@@ -166,7 +207,23 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
           className="mt-3 flex items-center justify-end gap-2"
           style={{ minHeight: 24 }}
         >
-          {priceLoading ? (
+          {isUsdc ? (
+            numericValue > 0 ? (
+              <span
+                className="text-sm font-medium"
+                style={{ color: "#2775ca", fontFamily: "var(--font-code)" }}
+              >
+                Stablecoin - no price conversion needed
+              </span>
+            ) : (
+              <span
+                className="text-xs"
+                style={{ color: "var(--text-muted)", fontFamily: "var(--font-code)" }}
+              >
+                Enter amount in USDC
+              </span>
+            )
+          ) : priceLoading ? (
             <span
               className="text-xs"
               style={{ color: "var(--text-muted)", fontFamily: "var(--font-code)" }}
@@ -186,7 +243,7 @@ export default function AmountInput({ onSubmit }: AmountInputProps) {
                   className="text-xs"
                   style={{ color: "var(--text-muted)", fontFamily: "var(--font-code)" }}
                 >
-                  (1 SOL = {prices[currency].toFixed(2)} {currency})
+                  (1 SOL = {prices[fiatCurrency].toFixed(2)} {fiatCurrency})
                 </span>
               )}
             </>

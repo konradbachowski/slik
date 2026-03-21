@@ -20,9 +20,12 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SolanaBLIK - Instant crypto payments",
+  title: "SLIK - Instant crypto payments",
   description:
     "Pay with SOL at any merchant using a 6-digit code. Powered by Solana.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

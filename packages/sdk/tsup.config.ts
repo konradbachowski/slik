@@ -7,6 +7,6 @@ export default defineConfig({
   splitting: true,
   sourcemap: true,
   clean: true,
-  external: ["@solana/web3.js", "react"],
+  external: ["@solana/web3.js", "@solana/spl-token", "react"],
   treeshake: true,
 });

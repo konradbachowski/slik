@@ -1,8 +1,8 @@
-# SolanaBLIK
+# SLIK
 
 Payment gateway inspired by [BLIK](https://en.wikipedia.org/wiki/Blik) (Polish instant payment system) built on Solana with a custom Anchor program. Merchant enters amount, customer generates a 6-digit code, merchant types the code, customer approves in wallet, SOL is transferred atomically with an on-chain receipt.
 
-**Live:** https://solana-blik.vercel.app
+**Live:** https://slik.vercel.app
 **Program:** [`AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv`](https://explorer.solana.com/address/AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv?cluster=devnet) (devnet)
 
 ## How it works
@@ -58,30 +58,25 @@ Single instruction `pay(amount, payment_id)`:
 Receipt PDA stores: customer, merchant, amount, payment_id, timestamp, bump.
 
 ```
-programs/solanablik/src/lib.rs    # Program source
-target/idl/solanablik.json        # Generated IDL
-src/lib/idl/                      # IDL + types (copied for frontend)
+programs/slik/src/lib.rs             # Program source
+target/idl/slik.json                 # Generated IDL
+src/lib/idl/                         # IDL + types (copied for frontend)
 ```
 
 ## SDK
 
-SolanaBLIK ships as two npm packages so any app can integrate BLIK-style payments:
+SLIK ships as two npm packages so any app can integrate BLIK-style payments:
 
-### `@solana-blik/sdk` — on-chain client
+### `@slik-pay/sdk` — on-chain client
 
 Transaction building, PDA derivation, receipt verification, React hooks. No `@coral-xyz/anchor` runtime — instructions are built manually for minimal bundle size.
 
 ```bash
-# From this monorepo (file: dependency)
-npm install @solana-blik/sdk@file:./packages/sdk @solana/web3.js
-
-# Or clone and link
-git clone https://github.com/konradbachowski/solana-blik.git
-cd solana-blik/packages/sdk && npm install && npm run build
+npm install @slik-pay/sdk @solana/web3.js
 ```
 
 ```typescript
-import { createPayTransaction, deriveReceiptPda, fetchReceipt, watchReceipt } from "@solana-blik/sdk";
+import { createPayTransaction, deriveReceiptPda, fetchReceipt, watchReceipt } from "@slik-pay/sdk";
 
 // Build a pay transaction
 const { transaction, receiptPda } = await createPayTransaction({
@@ -99,34 +94,33 @@ const unsubscribe = watchReceipt(connection, paymentId, {
 });
 ```
 
-**React hooks** (`@solana-blik/sdk/react`):
+**React hooks** (`@slik-pay/sdk/react`):
 
 ```tsx
-import { usePaymentCode, useBlikPay, useMerchantPayment } from "@solana-blik/sdk/react";
+import { usePaymentCode, useSlikPay, useMerchantPayment } from "@slik-pay/sdk/react";
 
 // Customer: generate code & approve payment
 const { code, status, linkedPayment, generate } = usePaymentCode({ apiBaseUrl: "/api" });
-const { pay, status: payStatus } = useBlikPay();
+const { pay, status: payStatus } = useSlikPay();
 
 // Merchant: create payment & watch for confirmation
 const { createPayment, linkCode, status } = useMerchantPayment({ apiBaseUrl: "/api", connection });
 ```
 
-### `@solana-blik/server` — backend handlers
+### `@slik-pay/server` — backend handlers
 
 Framework-agnostic payment handlers + storage adapters. One catch-all route replaces 7 API endpoints.
 
 ```bash
-# From this monorepo (file: dependency)
-npm install @solana-blik/sdk@file:./packages/sdk @solana-blik/server@file:./packages/server @solana/web3.js
+npm install @slik-pay/sdk @slik-pay/server @solana/web3.js
 ```
 
 **Next.js integration (~10 lines):**
 
 ```typescript
 // app/api/[...path]/route.ts
-import { createBlikRoutes } from "@solana-blik/server/nextjs";
-import { createUpstashStore } from "@solana-blik/server";
+import { createSlikRoutes } from "@slik-pay/server/nextjs";
+import { createUpstashStore } from "@slik-pay/server";
 import { Connection, clusterApiUrl } from "@solana/web3.js";
 
 const store = createUpstashStore({
@@ -135,7 +129,7 @@ const store = createUpstashStore({
 });
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
-export const { GET, POST } = createBlikRoutes({ store, connection });
+export const { GET, POST } = createSlikRoutes({ store, connection });
 ```
 
 For development without Redis, use `createMemoryStore()` — works identically with TTL-based expiration.
@@ -143,7 +137,7 @@ For development without Redis, use `createMemoryStore()` — works identically w
 Rate limiting is enabled by default. Disable with `rateLimit: false`:
 
 ```typescript
-export const { GET, POST } = createBlikRoutes({ store, connection, rateLimit: false });
+export const { GET, POST } = createSlikRoutes({ store, connection, rateLimit: false });
 ```
 
 ## Security
@@ -187,7 +181,7 @@ Payment codes use `crypto.getRandomValues()` instead of `Math.random()` for unpr
 
 ## API endpoints
 
-All served by a single catch-all route (`api/[...path]/route.ts`) via `@solana-blik/server`:
+All served by a single catch-all route (`api/[...path]/route.ts`) via `@slik-pay/server`:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -218,8 +212,8 @@ NEXT_PUBLIC_PROGRAM_ID=AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv
 
 ```bash
 anchor build
-cargo-build-sbf --manifest-path programs/solanablik/Cargo.toml --sbf-out-dir target/deploy
-solana program deploy target/deploy/solanablik.so --program-id target/deploy/solanablik-keypair.json --url devnet
+cargo-build-sbf --manifest-path programs/slik/Cargo.toml --sbf-out-dir target/deploy
+solana program deploy target/deploy/slik.so --program-id target/deploy/slik-keypair.json --url devnet
 ```
 
 Currently on **devnet** — switch Phantom to devnet in Settings > Developer Settings. Get devnet SOL from https://faucet.solana.com
@@ -227,14 +221,14 @@ Currently on **devnet** — switch Phantom to devnet in Settings > Developer Set
 ## Project structure
 
 ```
-├── programs/solanablik/
+├── programs/slik/
 │   └── src/lib.rs                    # Anchor program (pay instruction)
 ├── packages/
-│   ├── sdk/                          # @solana-blik/sdk
+│   ├── sdk/                          # @slik-pay/sdk
 │   │   └── src/
 │   │       ├── index.ts              # Core: TX building, PDA, receipt parsing
-│   │       └── react/                # React hooks (usePaymentCode, useBlikPay, etc.)
-│   └── server/                       # @solana-blik/server
+│   │       └── react/                # React hooks (usePaymentCode, useSlikPay, etc.)
+│   └── server/                       # @slik-pay/server
 │       └── src/
 │           ├── handlers.ts           # Framework-agnostic payment handlers
 │           ├── storage.ts            # Store interface + Redis/memory adapters + atomic ops

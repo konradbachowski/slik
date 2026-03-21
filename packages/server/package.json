@@ -1,7 +1,7 @@
 {
-  "name": "@solana-blik/server",
-  "version": "0.1.0",
-  "description": "SolanaBLIK server-side handlers and storage adapters",
+  "name": "@slik-pay/server",
+  "version": "0.1.1",
+  "description": "SLIK server-side handlers and storage adapters",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -23,7 +23,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/konradbachowski/solana-blik.git",
+    "url": "https://github.com/konradbachowski/slik.git",
     "directory": "packages/server"
   },
   "publishConfig": {
@@ -34,16 +34,20 @@
     "@upstash/redis": "^1.37.0"
   },
   "peerDependenciesMeta": {
-    "@upstash/redis": { "optional": true }
+    "@upstash/redis": {
+      "optional": true
+    }
   },
   "dependencies": {
-    "@solana-blik/sdk": "^0.1.0"
+    "@slik-pay/sdk": "^0.1.0"
   },
   "devDependencies": {
     "@solana/web3.js": "^1.98.4",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "license": "MIT"
 }

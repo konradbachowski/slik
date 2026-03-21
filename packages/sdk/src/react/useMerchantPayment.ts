@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { Connection } from "@solana/web3.js";
 import { deriveReceiptPda } from "../pda";
-import { useBlikContextOptional } from "./BlikProvider";
+import { useSlikContextOptional } from "./SlikProvider";
 
 type MerchantStatus =
   | "idle"
@@ -19,7 +19,7 @@ export interface UseMerchantPaymentReturn {
   paymentId: string | null;
   amount: number | null;
   error: string | null;
-  createPayment: (amount: number, merchantWallet: string) => Promise<void>;
+  createPayment: (amount: number, merchantWallet: string, currency?: "SOL" | "USDC") => Promise<void>;
   linkCode: (code: string) => Promise<void>;
   reset: () => void;
 }
@@ -28,11 +28,11 @@ export function useMerchantPayment(opts: {
   apiBaseUrl?: string;
   connection: Connection;
 }): UseMerchantPaymentReturn {
-  const ctx = useBlikContextOptional();
+  const ctx = useSlikContextOptional();
   const apiBaseUrl = opts.apiBaseUrl ?? ctx?.apiBaseUrl;
   if (!apiBaseUrl) {
     throw new Error(
-      "apiBaseUrl is required - pass it as a prop or wrap with <BlikProvider>"
+      "apiBaseUrl is required - pass it as a prop or wrap with <SlikProvider>"
     );
   }
 
@@ -46,13 +46,13 @@ export function useMerchantPayment(opts: {
   useEffect(() => () => cleanupRef.current?.(), []);
 
   const createPayment = useCallback(
-    async (amt: number, merchantWallet: string) => {
+    async (amt: number, merchantWallet: string, currency?: "SOL" | "USDC") => {
       setError(null);
       try {
         const res = await fetch(`${apiBaseUrl}/payments/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: amt, merchantWallet }),
+          body: JSON.stringify({ amount: amt, merchantWallet, ...(currency && { currency }) }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));

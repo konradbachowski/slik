@@ -115,7 +115,7 @@ export const store: Store = hasRedis ? createRedisStore() : createMemoryStore();
 
 if (!hasRedis) {
   console.warn(
-    "[solana-blik] UPSTASH_REDIS_REST_URL / TOKEN not set - using in-memory store (dev only)"
+    "[slik] UPSTASH_REDIS_REST_URL / TOKEN not set - using in-memory store (dev only)"
   );
 }
 

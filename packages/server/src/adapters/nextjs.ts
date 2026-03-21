@@ -3,13 +3,13 @@ import type { Store } from "../storage";
 import type { RateLimitResult } from "../ratelimit";
 import { checkRateLimit, DEFAULT_RATE_LIMITS } from "../ratelimit";
 import * as handlers from "../handlers";
-import { BlikError } from "../handlers";
+import { SlikError } from "../handlers";
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-export interface BlikRoutesConfig {
+export interface SlikRoutesConfig {
   store: Store;
   connection: Connection;
   /** Set to false to disable rate limiting. Default: true */
@@ -75,12 +75,12 @@ async function enforceRateLimit(
 // Returns { GET, POST } route handlers that can be re-exported from a
 // Next.js catch-all route, e.g.:
 //
-//   // app/api/blik/[...path]/route.ts
-//   import { createBlikRoutes } from "@solana-blik/server/nextjs";
-//   export const { GET, POST } = createBlikRoutes({ store, connection });
+//   // app/api/slik/[...path]/route.ts
+//   import { createSlikRoutes } from "@slik-pay/server/nextjs";
+//   export const { GET, POST } = createSlikRoutes({ store, connection });
 // ---------------------------------------------------------------------------
 
-export function createBlikRoutes(config: BlikRoutesConfig) {
+export function createSlikRoutes(config: SlikRoutesConfig) {
   const ctx: handlers.HandlerContext = {
     store: config.store,
     connection: config.connection,
@@ -151,7 +151,7 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
             });
             return Response.json(result);
           } catch (err) {
-            if (err instanceof BlikError && err.statusCode === 404) {
+            if (err instanceof SlikError && err.statusCode === 404) {
               // Track failed resolve attempt for this IP
               if (rateLimitEnabled) {
                 const ip = getClientIp(request);
@@ -221,18 +221,18 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
             );
             if (blocked) return blocked;
           }
-          return Response.json({ label: "SolanaBLIK", icon: "/icon.png" });
+          return Response.json({ label: "SLIK", icon: "/icon.png" });
         }
 
         return Response.json({ error: "Not found" }, { status: 404 });
       } catch (err) {
-        if (err instanceof BlikError) {
+        if (err instanceof SlikError) {
           return Response.json(
             { error: err.message },
             { status: err.statusCode }
           );
         }
-        console.error("[solana-blik]", err);
+        console.error("[slik]", err);
         return Response.json(
           { error: "Internal server error" },
           { status: 500 }
@@ -310,13 +310,13 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
 
         return Response.json({ error: "Not found" }, { status: 404 });
       } catch (err) {
-        if (err instanceof BlikError) {
+        if (err instanceof SlikError) {
           return Response.json(
             { error: err.message },
             { status: err.statusCode }
           );
         }
-        console.error("[solana-blik]", err);
+        console.error("[slik]", err);
         return Response.json(
           { error: "Internal server error" },
           { status: 500 }

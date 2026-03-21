@@ -3,14 +3,14 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { PublicKey } from "@solana/web3.js";
 
-export interface BlikContextValue {
+export interface SlikContextValue {
   apiBaseUrl: string;
   programId?: PublicKey;
 }
 
-const BlikContext = createContext<BlikContextValue | null>(null);
+const SlikContext = createContext<SlikContextValue | null>(null);
 
-export function BlikProvider({
+export function SlikProvider({
   children,
   apiBaseUrl,
   programId,
@@ -20,16 +20,16 @@ export function BlikProvider({
   programId?: PublicKey;
 }) {
   return (
-    <BlikContext.Provider value={{ apiBaseUrl, programId }}>
+    <SlikContext.Provider value={{ apiBaseUrl, programId }}>
       {children}
-    </BlikContext.Provider>
+    </SlikContext.Provider>
   );
 }
 
-export function useBlikContext(): BlikContextValue {
-  const ctx = useContext(BlikContext);
+export function useSlikContext(): SlikContextValue {
+  const ctx = useContext(SlikContext);
   if (!ctx)
-    throw new Error("useBlikContext must be used within <BlikProvider>");
+    throw new Error("useSlikContext must be used within <SlikProvider>");
   return ctx;
 }
 
@@ -37,6 +37,6 @@ export function useBlikContext(): BlikContextValue {
  * Optional variant - returns null if no provider is present.
  * Used internally by hooks to support both provider-based and prop-based usage.
  */
-export function useBlikContextOptional(): BlikContextValue | null {
-  return useContext(BlikContext);
+export function useSlikContextOptional(): SlikContextValue | null {
+  return useContext(SlikContext);
 }

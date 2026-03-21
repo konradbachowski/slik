@@ -2,15 +2,15 @@
  * Program IDL in camelCase format in order to be used in JS/TS.
  *
  * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/solanablik.json`.
+ * IDL can be found at `target/idl/slik.json`.
  */
-export type Solanablik = {
+export type Slik = {
   "address": "AqdVcH7aYHXtWCQbkEweCDoXGR8qMn4pdKhWScbMcyNv",
   "metadata": {
-    "name": "solanablik",
+    "name": "slik",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "SolanaBLIK - BLIK-style payments on Solana"
+    "description": "SLIK - 6-code payments on Solana (inspired by BLIK)"
   },
   "instructions": [
     {

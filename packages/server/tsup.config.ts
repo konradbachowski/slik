@@ -6,5 +6,5 @@ export default defineConfig({
   dts: true,
   splitting: true,
   clean: true,
-  external: ["@solana/web3.js", "@upstash/redis", "@solana-blik/sdk"],
+  external: ["@solana/web3.js", "@upstash/redis", "@slik-pay/sdk"],
 });

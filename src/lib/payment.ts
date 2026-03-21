@@ -10,4 +10,4 @@ export {
   parseReceipt,
   uuidToBytes,
   bytesToUuid,
-} from "@solana-blik/sdk";
+} from "@slik-pay/sdk";
