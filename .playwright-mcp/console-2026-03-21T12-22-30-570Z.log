@@ -1,2 +1,0 @@
-[   27883ms] [ERROR] Access to fetch at 'https://solana-blik.vercel.app/api/payments/create' from origin 'null' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ about:blank:0
-[   27884ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://solana-blik.vercel.app/api/payments/create:0
