@@ -21,15 +21,26 @@
     "build": "tsup",
     "dev": "tsup --watch"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/konradbachowski/solana-blik.git",
+    "directory": "packages/server"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
-    "@solana/web3.js": "^1.90.0"
+    "@solana/web3.js": "^1.90.0",
+    "@upstash/redis": "^1.37.0"
+  },
+  "peerDependenciesMeta": {
+    "@upstash/redis": { "optional": true }
   },
   "dependencies": {
-    "@solana-blik/sdk": "file:../sdk"
+    "@solana-blik/sdk": "^0.1.0"
   },
   "devDependencies": {
     "@solana/web3.js": "^1.98.4",
-    "@upstash/redis": "^1.37.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
   },

@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { Connection } from "@solana/web3.js";
 import { deriveReceiptPda } from "../pda";
+import { useBlikContextOptional } from "./BlikProvider";
 
 type MerchantStatus =
   | "idle"
@@ -13,7 +14,7 @@ type MerchantStatus =
   | "expired"
   | "error";
 
-interface UseMerchantPaymentReturn {
+export interface UseMerchantPaymentReturn {
   status: MerchantStatus;
   paymentId: string | null;
   amount: number | null;
@@ -24,10 +25,18 @@ interface UseMerchantPaymentReturn {
 }
 
 export function useMerchantPayment(opts: {
-  apiBaseUrl: string;
+  apiBaseUrl?: string;
   connection: Connection;
 }): UseMerchantPaymentReturn {
-  const { apiBaseUrl, connection } = opts;
+  const ctx = useBlikContextOptional();
+  const apiBaseUrl = opts.apiBaseUrl ?? ctx?.apiBaseUrl;
+  if (!apiBaseUrl) {
+    throw new Error(
+      "apiBaseUrl is required - pass it as a prop or wrap with <BlikProvider>"
+    );
+  }
+
+  const { connection } = opts;
   const [status, setStatus] = useState<MerchantStatus>("idle");
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
@@ -128,7 +137,11 @@ export function useMerchantPayment(opts: {
           }
         }, 3000);
 
+        // S6: Guard against double cleanup
+        let cleaned = false;
         function cleanup() {
+          if (cleaned) return;
+          cleaned = true;
           connection.removeAccountChangeListener(subId);
           clearInterval(fallbackInterval);
           cleanupRef.current = null;

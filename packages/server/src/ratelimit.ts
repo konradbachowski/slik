@@ -23,7 +23,7 @@ export interface RateLimitResult {
 
 /**
  * Check rate limit for a given identifier (e.g., IP address).
- * Uses a simple fixed-window counter stored in the Store.
+ * Uses an atomic fixed-window counter stored in the Store.
  */
 export async function checkRateLimit(
   store: Store,
@@ -35,12 +35,12 @@ export async function checkRateLimit(
     Math.floor(Date.now() / 1000 / rule.windowSeconds) * rule.windowSeconds;
   const key = `rl:${route}:${identifier}:${windowStart}`;
 
-  const current = await store.get<number>(key);
-  const count = (current ?? 0) + 1;
+  const count = await store.incr(key, rule.windowSeconds + 1);
+
+  const resetInSeconds =
+    windowStart + rule.windowSeconds - Math.floor(Date.now() / 1000);
 
   if (count > rule.maxRequests) {
-    const resetInSeconds =
-      windowStart + rule.windowSeconds - Math.floor(Date.now() / 1000);
     return {
       allowed: false,
       remaining: 0,
@@ -48,13 +48,10 @@ export async function checkRateLimit(
     };
   }
 
-  await store.set(key, count, rule.windowSeconds + 1); // +1s buffer for clock drift
-
   return {
     allowed: true,
     remaining: rule.maxRequests - count,
-    resetInSeconds:
-      windowStart + rule.windowSeconds - Math.floor(Date.now() / 1000),
+    resetInSeconds: Math.max(resetInSeconds, 1),
   };
 }
 
@@ -66,7 +63,8 @@ export async function checkRateLimit(
 export const DEFAULT_RATE_LIMITS: Record<string, RateLimitRule> = {
   "codes/generate": { maxRequests: 5, windowSeconds: 60 },
   "codes/resolve": { maxRequests: 30, windowSeconds: 60 },
-  "codes/resolve:burst": { maxRequests: 100, windowSeconds: 10 }, // anti brute-force
+  "codes/resolve:burst": { maxRequests: 100, windowSeconds: 10 }, // anti brute-force (per-IP)
+  "codes/resolve:global": { maxRequests: 500, windowSeconds: 10 }, // anti distributed brute-force (all IPs combined)
   "payments/create": { maxRequests: 10, windowSeconds: 60 },
   "payments/link": { maxRequests: 10, windowSeconds: 60 },
   "payments/status": { maxRequests: 30, windowSeconds: 60 },

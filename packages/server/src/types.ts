@@ -7,6 +7,7 @@ export interface CodeData {
 export type PaymentStatus = "awaiting_code" | "linked" | "paid" | "expired";
 
 export interface PaymentData {
+  /** Amount in SOL (not lamports, not fiat) */
   amount: number;
   status: PaymentStatus;
   merchantWallet: string;

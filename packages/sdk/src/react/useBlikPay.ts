@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { Connection, PublicKey } from "@solana/web3.js";
 import { Transaction } from "@solana/web3.js";
 import { watchReceipt } from "../receipt";
@@ -13,7 +13,7 @@ type PayStatus =
   | "paid"
   | "error";
 
-interface UseBlikPayReturn {
+export interface UseBlikPayReturn {
   status: PayStatus;
   error: string | null;
   pay: (opts: {
@@ -29,9 +29,32 @@ interface UseBlikPayReturn {
   reset: () => void;
 }
 
+/** Portable base64 decode that works in browsers without Buffer polyfill. */
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
 export function useBlikPay(): UseBlikPayReturn {
   const [status, setStatus] = useState<PayStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const statusRef = useRef<PayStatus>("idle");
+  const unsubRef = useRef<(() => void) | null>(null);
+
+  // Keep statusRef in sync with state
+  statusRef.current = status;
+
+  // Clean up watchReceipt subscription on unmount
+  useEffect(() => {
+    return () => {
+      unsubRef.current?.();
+      unsubRef.current = null;
+    };
+  }, []);
 
   const pay = useCallback(
     async (opts: {
@@ -51,6 +74,11 @@ export function useBlikPay(): UseBlikPayReturn {
         connection,
         sendTransaction,
       } = opts;
+
+      // Clean up any previous subscription
+      unsubRef.current?.();
+      unsubRef.current = null;
+
       setError(null);
       setStatus("building");
 
@@ -68,29 +96,32 @@ export function useBlikPay(): UseBlikPayReturn {
           );
         }
         const data = (await res.json()) as { transaction: string };
-        const txBuffer = Buffer.from(data.transaction, "base64");
-        const transaction = Transaction.from(txBuffer);
+        const txBytes = base64ToUint8Array(data.transaction);
+        const transaction = Transaction.from(txBytes);
 
         setStatus("signing");
         await sendTransaction(transaction, connection);
 
         setStatus("confirming");
         await new Promise<void>((resolve, reject) => {
-          watchReceipt(connection, paymentId, {
+          const unsub = watchReceipt(connection, paymentId, {
             onConfirmed: () => {
+              unsubRef.current = null;
               setStatus("paid");
               resolve();
             },
             onError: (err) => {
+              unsubRef.current = null;
               setError(err.message);
               setStatus("error");
               reject(err);
             },
             timeoutMs: 120_000,
           });
+          unsubRef.current = unsub;
         });
       } catch (err) {
-        if (status !== "paid") {
+        if (statusRef.current !== "paid") {
           setError(
             err instanceof Error ? err.message : "Payment failed"
           );
@@ -98,10 +129,12 @@ export function useBlikPay(): UseBlikPayReturn {
         }
       }
     },
-    [status]
+    []
   );
 
   const reset = useCallback(() => {
+    unsubRef.current?.();
+    unsubRef.current = null;
     setStatus("idle");
     setError(null);
   }, []);

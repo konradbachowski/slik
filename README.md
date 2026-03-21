@@ -72,7 +72,12 @@ SolanaBLIK ships as two npm packages so any app can integrate BLIK-style payment
 Transaction building, PDA derivation, receipt verification, React hooks. No `@coral-xyz/anchor` runtime — instructions are built manually for minimal bundle size.
 
 ```bash
-npm install @solana-blik/sdk @solana/web3.js
+# From this monorepo (file: dependency)
+npm install @solana-blik/sdk@file:./packages/sdk @solana/web3.js
+
+# Or clone and link
+git clone https://github.com/konradbachowski/solana-blik.git
+cd solana-blik/packages/sdk && npm install && npm run build
 ```
 
 ```typescript
@@ -112,7 +117,8 @@ const { createPayment, linkCode, status } = useMerchantPayment({ apiBaseUrl: "/a
 Framework-agnostic payment handlers + storage adapters. One catch-all route replaces 7 API endpoints.
 
 ```bash
-npm install @solana-blik/server @solana-blik/sdk @solana/web3.js
+# From this monorepo (file: dependency)
+npm install @solana-blik/sdk@file:./packages/sdk @solana-blik/server@file:./packages/server @solana/web3.js
 ```
 
 **Next.js integration (~10 lines):**
@@ -133,6 +139,39 @@ export const { GET, POST } = createBlikRoutes({ store, connection });
 ```
 
 For development without Redis, use `createMemoryStore()` — works identically with TTL-based expiration.
+
+Rate limiting is enabled by default. Disable with `rateLimit: false`:
+
+```typescript
+export const { GET, POST } = createBlikRoutes({ store, connection, rateLimit: false });
+```
+
+## Security
+
+### Rate limiting
+
+All API endpoints are rate-limited per IP using a fixed-window counter stored in the same Redis instance. The `/codes/resolve` endpoint has an additional burst limiter (100 req/10s) to prevent brute-force enumeration of active 6-digit codes.
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| `POST /codes/generate` | 5 | 60s |
+| `GET /codes/{code}/resolve` | 30 + 100 burst | 60s / 10s |
+| `POST /payments/create` | 10 | 60s |
+| `POST /payments/link` | 10 | 60s |
+| `GET /payments/{id}/status` | 30 | 60s |
+| `POST /pay` | 5 | 60s |
+
+### Atomic code linking
+
+Payment linking uses a Redis Lua script (compare-and-set) to prevent race conditions. If two merchants enter the same code simultaneously, exactly one succeeds and the other receives a `409 Conflict`. No TOCTOU window.
+
+### Security headers
+
+All responses include: `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and `Permissions-Policy`.
+
+### Cryptographic code generation
+
+Payment codes use `crypto.getRandomValues()` instead of `Math.random()` for unpredictable generation.
 
 ## Stack
 
@@ -198,9 +237,11 @@ Currently on **devnet** — switch Phantom to devnet in Settings > Developer Set
 │   └── server/                       # @solana-blik/server
 │       └── src/
 │           ├── handlers.ts           # Framework-agnostic payment handlers
-│           ├── storage.ts            # Store interface + Redis/memory adapters
+│           ├── storage.ts            # Store interface + Redis/memory adapters + atomic ops
+│           ├── ratelimit.ts          # Per-IP rate limiting (fixed-window counter)
 │           └── adapters/nextjs.ts    # Next.js catch-all route adapter
 ├── src/
+│   ├── middleware.ts                  # Security headers (CSP, X-Frame-Options, etc.)
 │   ├── app/
 │   │   ├── page.tsx                  # Customer UI (uses SDK hooks)
 │   │   ├── merchant/page.tsx         # Merchant terminal (uses SDK hooks)

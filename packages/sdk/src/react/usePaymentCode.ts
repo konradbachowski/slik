@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useBlikContextOptional } from "./BlikProvider";
 
 type CodeStatus = "idle" | "generating" | "active" | "linked" | "expired";
 
@@ -10,7 +11,7 @@ interface LinkedPayment {
   reference?: string;
 }
 
-interface UsePaymentCodeReturn {
+export interface UsePaymentCodeReturn {
   code: string | null;
   expiresAt: number;
   status: CodeStatus;
@@ -20,10 +21,17 @@ interface UsePaymentCodeReturn {
   reset: () => void;
 }
 
-export function usePaymentCode(opts: {
-  apiBaseUrl: string;
+export function usePaymentCode(opts?: {
+  apiBaseUrl?: string;
 }): UsePaymentCodeReturn {
-  const { apiBaseUrl } = opts;
+  const ctx = useBlikContextOptional();
+  const apiBaseUrl = opts?.apiBaseUrl ?? ctx?.apiBaseUrl;
+  if (!apiBaseUrl) {
+    throw new Error(
+      "apiBaseUrl is required - pass it as a prop or wrap with <BlikProvider>"
+    );
+  }
+
   const [code, setCode] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState(0);
   const [status, setStatus] = useState<CodeStatus>("idle");
@@ -32,6 +40,7 @@ export function usePaymentCode(opts: {
   );
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const expiresAtRef = useRef(0);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -68,16 +77,25 @@ export function usePaymentCode(opts: {
         };
         const newCode = data.code;
         const ttl = data.expiresIn || 120;
+        const deadline = Date.now() + ttl * 1000;
 
         setCode(newCode);
-        setExpiresAt(Date.now() + ttl * 1000);
+        setExpiresAt(deadline);
+        expiresAtRef.current = deadline;
         setStatus("active");
 
         // Poll for code resolution
         pollRef.current = setInterval(async () => {
+          // S5: Stop polling after code TTL expires
+          if (Date.now() > expiresAtRef.current) {
+            stopPolling();
+            setStatus("expired");
+            return;
+          }
+
           try {
             const resolveRes = await fetch(
-              `${apiBaseUrl}/codes/${newCode}/resolve`
+              `${apiBaseUrl}/codes/${newCode}/resolve?wallet=${encodeURIComponent(walletPubkey)}`
             );
             if (!resolveRes.ok) {
               if (resolveRes.status === 404) {
@@ -122,6 +140,7 @@ export function usePaymentCode(opts: {
     stopPolling();
     setCode(null);
     setExpiresAt(0);
+    expiresAtRef.current = 0;
     setStatus("idle");
     setLinkedPayment(null);
     setError(null);

@@ -26,6 +26,8 @@ export interface Store {
     updates: Record<string, unknown>,
     ttlSeconds: number
   ): Promise<boolean>;
+  /** Atomic increment. Returns the new value. Creates key with value 1 if it doesn't exist. */
+  incr(key: string, ttlSeconds: number): Promise<number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +89,16 @@ export function createUpstashStore(config: {
       );
       return result === 1;
     },
+    async incr(key: string, ttlSeconds: number): Promise<number> {
+      const redis = await getRedis();
+      // INCR is atomic in Redis. If key doesn't exist, it's set to 0 then incremented to 1.
+      const count = await redis.incr(key);
+      // Set TTL only on first increment (when count === 1)
+      if (count === 1) {
+        await redis.expire(key, ttlSeconds);
+      }
+      return count;
+    },
   };
 }
 
@@ -139,6 +151,16 @@ export function createMemoryStore(): Store {
         expiresAt: Date.now() + ttlSeconds * 1000,
       });
       return true;
+    },
+    async incr(key: string, ttlSeconds: number): Promise<number> {
+      prune(key);
+      const entry = data.get(key);
+      const newCount = entry ? (entry.value as number) + 1 : 1;
+      data.set(key, {
+        value: newCount,
+        expiresAt: entry ? entry.expiresAt : Date.now() + ttlSeconds * 1000,
+      });
+      return newCount;
     },
   };
 }

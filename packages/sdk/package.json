@@ -17,6 +17,14 @@
       "require": "./dist/react/index.js"
     }
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/konradbachowski/solana-blik.git",
+    "directory": "packages/sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"

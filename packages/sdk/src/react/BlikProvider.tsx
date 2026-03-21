@@ -3,7 +3,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { PublicKey } from "@solana/web3.js";
 
-interface BlikContextValue {
+export interface BlikContextValue {
   apiBaseUrl: string;
   programId?: PublicKey;
 }
@@ -31,4 +31,12 @@ export function useBlikContext(): BlikContextValue {
   if (!ctx)
     throw new Error("useBlikContext must be used within <BlikProvider>");
   return ctx;
+}
+
+/**
+ * Optional variant - returns null if no provider is present.
+ * Used internally by hooks to support both provider-based and prop-based usage.
+ */
+export function useBlikContextOptional(): BlikContextValue | null {
+  return useContext(BlikContext);
 }

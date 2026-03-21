@@ -70,22 +70,28 @@ export async function handleGenerateCode(
 
 export async function handleResolveCode(
   ctx: HandlerContext,
-  input: { code: string }
+  input: { code: string; wallet?: string }
 ): Promise<{
   status: string;
   paymentId?: string;
   amount?: number;
   reference?: string;
 }> {
-  const { code } = input;
+  const { code, wallet } = input;
 
   if (!code || !/^\d{6}$/.test(code)) {
     throw new BlikError("Invalid code format. Must be 6 digits.", 400);
   }
 
+  if (!wallet || typeof wallet !== "string") {
+    throw new BlikError("Missing wallet parameter.", 400);
+  }
+
   const codeData = await resolveCode(ctx.store, code);
 
-  if (!codeData) {
+  // Return same 404 whether code doesn't exist or wallet doesn't match
+  // (prevents information leakage about which codes are active)
+  if (!codeData || codeData.walletPubkey !== wallet) {
     throw new BlikError("Code not found or expired.", 404);
   }
 
@@ -122,6 +128,14 @@ export async function handleResolveCode(
 // POST /payments/create
 // ---------------------------------------------------------------------------
 
+/**
+ * Create a new payment request.
+ *
+ * **`amount` MUST be denominated in SOL** (not lamports, not fiat).
+ * The frontend is responsible for converting fiat to SOL before calling
+ * this endpoint. The stored amount is passed directly to the on-chain
+ * transfer instruction as `amountSol`.
+ */
 export async function handleCreatePayment(
   ctx: HandlerContext,
   input: { amount: number; merchantWallet: string }
@@ -132,8 +146,12 @@ export async function handleCreatePayment(
     throw new BlikError("Invalid amount. Must be a positive number.", 400);
   }
 
-  if (amount > 10_000) {
-    throw new BlikError("Amount exceeds maximum allowed (10,000 SOL).", 400);
+  if (amount < 0.001) {
+    throw new BlikError("Amount too small. Minimum is 0.001 SOL.", 400);
+  }
+
+  if (amount > 100) {
+    throw new BlikError("Amount exceeds maximum allowed (100 SOL).", 400);
   }
 
   if (!merchantWallet || typeof merchantWallet !== "string") {

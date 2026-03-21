@@ -30,16 +30,15 @@ function getClientIp(request: Request): string {
   return "unknown";
 }
 
-async function enforceRateLimit(
+async function enforceRateLimitWithId(
   store: Store,
-  request: Request,
+  identifier: string,
   routeKey: string
 ): Promise<Response | null> {
-  const ip = getClientIp(request);
   const rule = DEFAULT_RATE_LIMITS[routeKey];
   if (!rule) return null;
 
-  const result = await checkRateLimit(store, ip, routeKey, rule);
+  const result = await checkRateLimit(store, identifier, routeKey, rule);
 
   if (!result.allowed) {
     return new Response(
@@ -59,6 +58,15 @@ async function enforceRateLimit(
   }
 
   return null; // allowed
+}
+
+async function enforceRateLimit(
+  store: Store,
+  request: Request,
+  routeKey: string
+): Promise<Response | null> {
+  const ip = getClientIp(request);
+  return enforceRateLimitWithId(store, ip, routeKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -90,24 +98,77 @@ export function createBlikRoutes(config: BlikRoutesConfig) {
         const codeMatch = path.match(/\/codes\/(\d{6})\/resolve$/);
         if (codeMatch) {
           if (rateLimitEnabled) {
-            // Check both normal and burst limits
+            const ip = getClientIp(request);
+
+            // Check if IP is locked out from too many failed attempts
+            const lockoutKey = `lockout:resolve:${ip}`;
+            const isLocked = await config.store.get<boolean>(lockoutKey);
+            if (isLocked) {
+              return new Response(
+                JSON.stringify({
+                  error: "Too many failed attempts. Try again later.",
+                  retryAfter: 300,
+                }),
+                {
+                  status: 429,
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Retry-After": "300",
+                  },
+                }
+              );
+            }
+
+            // Per-IP normal limit
             const blocked = await enforceRateLimit(
               config.store,
               request,
               "codes/resolve"
             );
             if (blocked) return blocked;
+
+            // Per-IP burst limit
             const burstBlocked = await enforceRateLimit(
               config.store,
               request,
               "codes/resolve:burst"
             );
             if (burstBlocked) return burstBlocked;
+
+            // Global rate limit (prevents distributed brute-force across many IPs)
+            const globalBlocked = await enforceRateLimitWithId(
+              config.store,
+              "global",
+              "codes/resolve:global"
+            );
+            if (globalBlocked) return globalBlocked;
           }
-          const result = await handlers.handleResolveCode(ctx, {
-            code: codeMatch[1],
-          });
-          return Response.json(result);
+
+          try {
+            const result = await handlers.handleResolveCode(ctx, {
+              code: codeMatch[1],
+              wallet: url.searchParams.get("wallet") ?? undefined,
+            });
+            return Response.json(result);
+          } catch (err) {
+            if (err instanceof BlikError && err.statusCode === 404) {
+              // Track failed resolve attempt for this IP
+              if (rateLimitEnabled) {
+                const ip = getClientIp(request);
+                const failKey = `fail:resolve:${ip}`;
+                const fails = await config.store.incr(failKey, 60);
+                if (fails >= 20) {
+                  // Lock out this IP for 5 minutes
+                  await config.store.set(
+                    `lockout:resolve:${ip}`,
+                    true,
+                    300
+                  );
+                }
+              }
+            }
+            throw err; // re-throw to be caught by outer catch
+          }
         }
 
         // GET /payments/:id/status
