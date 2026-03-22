@@ -22,36 +22,36 @@ const team: TeamMember[] = [
     description:
       "Full-stack developer turned AI-native builder. Leads architecture, SDK development, and Solana program design.",
     initials: "KB",
-    avatar: "https://github.com/konradbachowski.png",
+    avatar: "https://avatars.githubusercontent.com/u/33181020?v=4",
     links: [
       { label: "GitHub", href: "https://github.com/konradbachowski" },
     ],
   },
   {
     name: "Tomasz Stefaniak",
-    role: "Developer",
+    role: "Co-founder",
     description:
       "Building the on-chain infrastructure and smart contract layer powering SLIK payments.",
     initials: "TS",
-    avatar: "https://avatars.githubusercontent.com/u/33181020?v=4",
+    avatar: "https://avatars.githubusercontent.com/u/51191241?v=4",
     links: [
       { label: "GitHub", href: "https://github.com/tomaszstefaniak" },
     ],
   },
   {
     name: "Kuba Kołtun",
-    role: "Developer",
+    role: "Co-founder",
     description:
       "SDK development and frontend integration. Making SLIK easy to plug into any merchant stack.",
     initials: "KK",
-    avatar: "https://github.com/kubakoltun.png",
+    avatar: "https://avatars.githubusercontent.com/u/87318086?v=4",
     links: [
       { label: "GitHub", href: "https://github.com/kubakoltun" },
     ],
   },
   {
     name: "Daniel Dzierzęcki",
-    role: "Developer",
+    role: "Co-founder",
     description:
       "Backend systems and payment flow orchestration. Keeping the real-time pipeline fast and reliable.",
     initials: "DD",
