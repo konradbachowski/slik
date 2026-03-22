@@ -1,6 +1,6 @@
 {
   "name": "@slik-pay/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "SLIK SDK - 6-code payments on Solana (inspired by BLIK)",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
