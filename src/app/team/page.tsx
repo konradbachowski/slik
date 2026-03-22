@@ -11,7 +11,7 @@ interface TeamMember {
   role: string;
   description: string;
   initials: string;
-  open: boolean;
+  avatar?: string;
   links: { label: string; href: string }[];
 }
 
@@ -22,47 +22,42 @@ const team: TeamMember[] = [
     description:
       "Full-stack developer turned AI-native builder. Leads architecture, SDK development, and Solana program design.",
     initials: "KB",
-    open: false,
+    avatar: "https://github.com/konradbachowski.png",
     links: [
       { label: "GitHub", href: "https://github.com/konradbachowski" },
-      { label: "LinkedIn", href: "#" },
     ],
   },
   {
-    name: "Kamil",
-    role: "Co-founder",
+    name: "Tomasz Stefaniak",
+    role: "Developer",
     description:
-      "Technical co-founder. Verification, quality gates, and making sure nothing ships broken.",
-    initials: "K",
-    open: false,
-    links: [{ label: "LinkedIn", href: "#" }],
-  },
-  {
-    name: "Open position",
-    role: "Mobile Engineer",
-    description:
-      "We\u2019re looking for a React Native engineer to build the SLIK mobile app. Solana experience preferred.",
-    initials: "?",
-    open: true,
+      "Building the on-chain infrastructure and smart contract layer powering SLIK payments.",
+    initials: "TS",
+    avatar: "https://avatars.githubusercontent.com/u/33181020?v=4",
     links: [
-      {
-        label: "Apply \u2192",
-        href: "https://cal.com/konrad-bachowski/consultation-heyneuron",
-      },
+      { label: "GitHub", href: "https://github.com/tomaszstefaniak" },
     ],
   },
   {
-    name: "Open position",
-    role: "Growth & Partnerships",
+    name: "Kuba Kołtun",
+    role: "Developer",
     description:
-      "Help us bring SLIK to merchants and developers. Business development, partnerships, and community.",
-    initials: "?",
-    open: true,
+      "SDK development and frontend integration. Making SLIK easy to plug into any merchant stack.",
+    initials: "KK",
+    avatar: "https://github.com/kubakoltun.png",
     links: [
-      {
-        label: "Apply \u2192",
-        href: "https://cal.com/konrad-bachowski/consultation-heyneuron",
-      },
+      { label: "GitHub", href: "https://github.com/kubakoltun" },
+    ],
+  },
+  {
+    name: "Daniel Dzierzęcki",
+    role: "Developer",
+    description:
+      "Backend systems and payment flow orchestration. Keeping the real-time pipeline fast and reliable.",
+    initials: "DD",
+    avatar: "https://avatars.githubusercontent.com/u/92030023?v=4",
+    links: [
+      { label: "GitHub", href: "https://github.com/Dzierzyn" },
     ],
   },
 ];
@@ -130,20 +125,13 @@ function ArrowIcon() {
 // ---------------------------------------------------------------------------
 
 function TeamCard({ member }: { member: TeamMember }) {
-  const accentColor = member.open ? "#14F195" : "var(--primary)";
-  const accentBg = member.open
-    ? "rgba(20, 241, 149, 0.08)"
-    : "var(--primary-light)";
-
   return (
     <div
       className="group"
       style={{
         background: "var(--bg-card)",
         borderRadius: "var(--radius-card)",
-        border: member.open
-          ? "2px dashed rgba(20, 241, 149, 0.4)"
-          : "1px solid var(--border)",
+        border: "1px solid var(--border)",
         padding: 28,
         display: "flex",
         flexDirection: "column",
@@ -154,44 +142,51 @@ function TeamCard({ member }: { member: TeamMember }) {
       onMouseEnter={(e) => {
         const el = e.currentTarget;
         el.style.transform = "translateY(-4px)";
-        el.style.boxShadow = member.open
-          ? "0 12px 40px rgba(20, 241, 149, 0.12)"
-          : "0 12px 40px rgba(99, 91, 255, 0.12)";
-        el.style.borderColor = member.open
-          ? "rgba(20, 241, 149, 0.6)"
-          : "var(--primary)";
+        el.style.boxShadow = "0 12px 40px rgba(99, 91, 255, 0.12)";
+        el.style.borderColor = "var(--primary)";
       }}
       onMouseLeave={(e) => {
         const el = e.currentTarget;
         el.style.transform = "translateY(0)";
         el.style.boxShadow = "none";
-        el.style.borderColor = member.open
-          ? "rgba(20, 241, 149, 0.4)"
-          : "var(--border)";
+        el.style.borderColor = "var(--border)";
       }}
     >
       {/* Avatar */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            background: member.open ? "transparent" : accentColor,
-            border: member.open ? `2px dashed ${accentColor}` : "none",
-            color: member.open ? accentColor : "#ffffff",
-            fontFamily: "var(--font-code)",
-            fontSize: member.open ? 24 : 20,
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          {member.initials}
-        </div>
+        {member.avatar ? (
+          <img
+            src={member.avatar}
+            alt={member.name}
+            width={64}
+            height={64}
+            style={{
+              borderRadius: "50%",
+              flexShrink: 0,
+              objectFit: "cover",
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              background: "var(--primary)",
+              color: "#ffffff",
+              fontFamily: "var(--font-code)",
+              fontSize: 20,
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            {member.initials}
+          </div>
+        )}
 
         <div style={{ minWidth: 0 }}>
           <h3
@@ -199,15 +194,11 @@ function TeamCard({ member }: { member: TeamMember }) {
               margin: 0,
               fontSize: 18,
               fontWeight: 700,
-              color: member.open ? "var(--text-secondary)" : "var(--text)",
+              color: "var(--text)",
               lineHeight: 1.3,
             }}
           >
-            {member.open ? (
-              <span style={{ fontStyle: "italic" }}>{member.name}</span>
-            ) : (
-              member.name
-            )}
+            {member.name}
           </h3>
           <p
             style={{
@@ -217,7 +208,7 @@ function TeamCard({ member }: { member: TeamMember }) {
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               fontFamily: "var(--font-code)",
-              color: accentColor,
+              color: "var(--primary)",
             }}
           >
             {member.role}
@@ -241,7 +232,6 @@ function TeamCard({ member }: { member: TeamMember }) {
       {/* Links */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
         {member.links.map((link) => {
-          const isApply = link.label.startsWith("Apply");
           const isGitHub = link.label === "GitHub";
 
           return (
@@ -257,43 +247,29 @@ function TeamCard({ member }: { member: TeamMember }) {
                 fontSize: 13,
                 fontWeight: 600,
                 fontFamily: "var(--font-code)",
-                color: isApply ? accentColor : "var(--text-secondary)",
+                color: "var(--text-secondary)",
                 textDecoration: "none",
-                padding: isApply ? "8px 16px" : "6px 12px",
+                padding: "6px 12px",
                 borderRadius: "var(--radius-btn)",
-                background: isApply ? accentBg : "var(--bg-base)",
-                border: isApply
-                  ? `1px solid ${accentColor}`
-                  : "1px solid var(--border)",
+                background: "var(--bg-base)",
+                border: "1px solid var(--border)",
                 transition: "all var(--transition)",
                 letterSpacing: "0.01em",
               }}
               onMouseEnter={(e) => {
                 const el = e.currentTarget;
                 el.style.transform = "translateY(-1px)";
-                if (isApply) {
-                  el.style.background = accentColor;
-                  el.style.color = "#1a1a2e";
-                } else {
-                  el.style.borderColor = "var(--primary)";
-                  el.style.color = "var(--primary)";
-                }
+                el.style.borderColor = "var(--primary)";
+                el.style.color = "var(--primary)";
               }}
               onMouseLeave={(e) => {
                 const el = e.currentTarget;
                 el.style.transform = "translateY(0)";
-                if (isApply) {
-                  el.style.background = accentBg;
-                  el.style.color = accentColor;
-                } else {
-                  el.style.borderColor = "var(--border)";
-                  el.style.color = "var(--text-secondary)";
-                }
+                el.style.borderColor = "var(--border)";
+                el.style.color = "var(--text-secondary)";
               }}
             >
-              {isGitHub && <GitHubIcon />}
-              {!isGitHub && !isApply && <LinkedInIcon />}
-              {isApply && <ArrowIcon />}
+              {isGitHub ? <GitHubIcon /> : <LinkedInIcon />}
               {link.label}
             </a>
           );
@@ -362,8 +338,8 @@ export default function TeamPage() {
               maxWidth: 520,
             }}
           >
-            A small team shipping fast. Two builders, open seats for those who
-            want to shape the future of payments on Solana.
+            Four builders shipping fast, shaping the future of payments on
+            Solana.
           </p>
         </header>
 
