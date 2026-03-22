@@ -39,7 +39,7 @@ const team: TeamMember[] = [
     ],
   },
   {
-    name: "Kuba Kołtun",
+    name: "Jakub Kołtun",
     role: "Co-founder",
     description:
       "SDK development and frontend integration. Making SLIK easy to plug into any merchant stack.",
