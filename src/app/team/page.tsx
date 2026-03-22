@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Nav } from "@/components/Nav";
 
 // ---------------------------------------------------------------------------
@@ -155,7 +156,7 @@ function TeamCard({ member }: { member: TeamMember }) {
       {/* Avatar */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         {member.avatar ? (
-          <img
+          <Image
             src={member.avatar}
             alt={member.name}
             width={64}
@@ -165,6 +166,7 @@ function TeamCard({ member }: { member: TeamMember }) {
               flexShrink: 0,
               objectFit: "cover",
             }}
+            unoptimized
           />
         ) : (
           <div
